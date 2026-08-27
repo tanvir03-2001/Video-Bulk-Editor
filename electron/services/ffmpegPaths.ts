@@ -1,0 +1,73 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+const FFMPEG_MISSING_MESSAGE =
+  'FFmpeg is required to process videos. Please install/configure FFmpeg and make sure ffmpeg and ffprobe are available.';
+
+function exists(filePath: string | null | undefined): filePath is string {
+  return typeof filePath === 'string' && filePath.length > 0 && fs.existsSync(filePath);
+}
+
+function isElectronPackaged(): boolean {
+  try {
+    // Lazy require so non-Electron scripts can still resolve package binaries.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const electron = require('electron') as { app?: { isPackaged?: boolean } };
+    return Boolean(electron.app?.isPackaged);
+  } catch {
+    return false;
+  }
+}
+
+function resolveFromResources(binaryName: string): string | null {
+  if (!isElectronPackaged()) {
+    return null;
+  }
+  const candidate = path.join(process.resourcesPath, 'ffmpeg', binaryName);
+  return exists(candidate) ? candidate : null;
+}
+
+function resolveFfmpegFromPackage(): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffmpegPath = require('ffmpeg-static') as string | null;
+    return exists(ffmpegPath) ? ffmpegPath : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveFfprobeFromPackage(): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffprobe = require('ffprobe-static') as { path?: string };
+    return exists(ffprobe.path) ? ffprobe.path : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getFfmpegPath(): string | null {
+  return (
+    resolveFromResources(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg') ??
+    resolveFfmpegFromPackage()
+  );
+}
+
+export function getFfprobePath(): string | null {
+  return (
+    resolveFromResources(process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe') ??
+    resolveFfprobeFromPackage()
+  );
+}
+
+export function assertFfmpegAvailable(): { available: boolean; error: string | null } {
+  const ffmpeg = getFfmpegPath();
+  const ffprobe = getFfprobePath();
+
+  if (!ffmpeg || !ffprobe) {
+    return { available: false, error: FFMPEG_MISSING_MESSAGE };
+  }
+
+  return { available: true, error: null };
+}
