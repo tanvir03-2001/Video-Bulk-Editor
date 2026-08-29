@@ -3,11 +3,17 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   MOVING_TEXT_SPEED_PRESETS,
+  type BrandingAspectRatio,
+  type BrandingSide,
   type BrandingConfig,
 } from '../../../shared/branding';
 import { getFfmpegPath, getFfprobePath } from '../ffmpegPaths';
 import { ProcessingCancelledError } from '../frameGenerator';
-import { buildBrandingFilterGraph } from './filterGraph';
+import { resolveCanvasLayout, type CanvasLayout, type ImageDimensions } from './canvasLayout';
+import {
+  buildBrandingFilterGraph,
+  type SideImageOverlayPlan,
+} from './filterGraph';
 import { runFfmpegProcess } from './ffmpegProcess';
 import { renderTextOverlayAsset } from './overlayAssets';
 
@@ -33,6 +39,9 @@ export interface BrandVideoResult {
   outputPath: string;
   encoder: string;
   videoInfo: VideoInfo;
+  outputWidth: number;
+  outputHeight: number;
+  outputAspectRatio: BrandingAspectRatio;
 }
 
 interface EncoderAttempt {
@@ -204,6 +213,23 @@ interface OverlayAssets {
   watermarkPath: string | null;
   watermarkTargetWidthPx: number | null;
   movingTextPath: string | null;
+  sideImages: Array<{
+    side: BrandingSide;
+    path: string;
+    dimensions: ImageDimensions;
+  }>;
+  layout: CanvasLayout;
+}
+
+async function readImageDimensions(imagePath: string): Promise<ImageDimensions> {
+  const sharpModule = await import('sharp');
+  const metadata = await sharpModule.default(imagePath).metadata();
+  const width = Number(metadata.width);
+  const height = Number(metadata.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) {
+    throw new Error(`Unable to read side image dimensions: ${path.basename(imagePath)}`);
+  }
+  return { width, height };
 }
 
 async function prepareOverlayAssets(
@@ -213,6 +239,29 @@ async function prepareOverlayAssets(
   let watermarkPath: string | null = null;
   let watermarkTargetWidthPx: number | null = null;
   let movingTextPath: string | null = null;
+  const sideImages: OverlayAssets['sideImages'] = [];
+  const sideImageDimensions: Partial<Record<BrandingSide, ImageDimensions>> = {};
+
+  const sideImageConfigs = [
+    { side: 'top' as const, config: config.canvas.top },
+    { side: 'bottom' as const, config: config.canvas.bottom },
+    { side: 'left' as const, config: config.canvas.left },
+    { side: 'right' as const, config: config.canvas.right },
+  ];
+  for (const { side, config: sideConfig } of sideImageConfigs) {
+    if (!sideConfig.enabled) {
+      continue;
+    }
+    if (!sideConfig.imagePath) {
+      throw new Error(`No image selected for the ${side} side`);
+    }
+    await fs.access(sideConfig.imagePath);
+    const dimensions = await readImageDimensions(sideConfig.imagePath);
+    sideImageDimensions[side] = dimensions;
+    sideImages.push({ side, path: sideConfig.imagePath, dimensions });
+  }
+
+  const layout = resolveCanvasLayout(videoInfo, config.canvas, sideImageDimensions);
 
   if (config.watermark.enabled) {
     if (config.watermark.mode === 'image') {
@@ -223,7 +272,7 @@ async function prepareOverlayAssets(
       watermarkPath = config.watermark.imagePath;
       watermarkTargetWidthPx = Math.max(
         2,
-        Math.round((videoInfo.width * config.watermark.scalePercent) / 100),
+        Math.round((layout.outputWidth * config.watermark.scalePercent) / 100),
       );
     } else {
       watermarkPath = await renderTextOverlayAsset({
@@ -234,13 +283,13 @@ async function prepareOverlayAssets(
         color: config.watermark.text.color,
         fontSizePx: Math.max(
           8,
-          Math.round((videoInfo.height * config.watermark.text.fontSizePercent) / 100),
+          Math.round((layout.outputHeight * config.watermark.text.fontSizePercent) / 100),
         ),
         secondaryFontSizePx: Math.max(
           4,
-          Math.round((videoInfo.height * config.watermark.text.fontSizePercent * 0.38) / 100),
+          Math.round((layout.outputHeight * config.watermark.text.fontSizePercent * 0.38) / 100),
         ),
-        maxWidthPx: Math.round(videoInfo.width * 0.9),
+        maxWidthPx: Math.round(layout.outputWidth * 0.9),
         shadow: config.watermark.text.shadow,
       });
     }
@@ -254,14 +303,14 @@ async function prepareOverlayAssets(
       color: '#ffffff',
       fontSizePx: Math.max(
         8,
-        Math.round((videoInfo.height * config.movingText.sizePercent) / 100),
+        Math.round((layout.outputHeight * config.movingText.sizePercent) / 100),
       ),
-      maxWidthPx: Math.round(videoInfo.width * 0.75),
+      maxWidthPx: Math.round(layout.outputWidth * 0.75),
       shadow: false,
     });
   }
 
-  return { watermarkPath, watermarkTargetWidthPx, movingTextPath };
+  return { watermarkPath, watermarkTargetWidthPx, movingTextPath, sideImages, layout };
 }
 
 function isMp4LikeContainer(outputPath: string): boolean {
@@ -297,8 +346,25 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
   const assets = await prepareOverlayAssets(config, videoInfo);
 
   const inputPaths: string[] = [];
+  const sideImagePlans: SideImageOverlayPlan[] = [];
   let watermarkInputIndex: number | null = null;
   let movingTextInputIndex: number | null = null;
+
+  for (const sideImage of assets.sideImages) {
+    inputPaths.push(sideImage.path);
+    const inputIndex = inputPaths.length; // 0 is the source video
+    const slot = assets.layout.slots.find((candidate) => candidate.side === sideImage.side);
+    if (slot) {
+      sideImagePlans.push({
+        side: sideImage.side,
+        inputIndex,
+        width: slot.width,
+        height: slot.height,
+        x: slot.x,
+        y: slot.y,
+      });
+    }
+  }
 
   if (assets.watermarkPath) {
     inputPaths.push(assets.watermarkPath);
@@ -311,6 +377,17 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
 
   const speedPreset = MOVING_TEXT_SPEED_PRESETS[config.movingText.speed];
   const graph = buildBrandingFilterGraph({
+    canvas: {
+      outputWidth: assets.layout.outputWidth,
+      outputHeight: assets.layout.outputHeight,
+      videoX: assets.layout.videoX,
+      videoY: assets.layout.videoY,
+      videoWidth: assets.layout.videoWidth,
+      videoHeight: assets.layout.videoHeight,
+      zoomPercent: config.canvas.zoomPercent,
+      backgroundColor: 'black',
+    },
+    sideImages: sideImagePlans,
     watermark:
       watermarkInputIndex !== null
         ? {
@@ -318,7 +395,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
             targetWidthPx: assets.watermarkTargetWidthPx,
             opacity: config.watermark.opacityPercent / 100,
             position: config.watermark.position,
-            marginPx: Math.round((videoInfo.width * config.watermark.marginPercent) / 100),
+            marginPx: Math.round((assets.layout.outputWidth * config.watermark.marginPercent) / 100),
           }
         : null,
     movingText:
@@ -366,7 +443,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
     args.push('-i', videoPath);
 
     for (const inputPath of inputPaths) {
-      args.push('-i', inputPath);
+      args.push('-loop', '1', '-i', inputPath);
     }
 
     if (previewDuration !== null) {
@@ -412,7 +489,14 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
       });
 
       onPercent?.(100);
-      return { outputPath, encoder: attempt.label, videoInfo };
+      return {
+        outputPath,
+        encoder: attempt.label,
+        videoInfo,
+        outputWidth: assets.layout.outputWidth,
+        outputHeight: assets.layout.outputHeight,
+        outputAspectRatio: config.canvas.aspectRatio,
+      };
     } catch (error) {
       await removeQuiet(outputPath);
 

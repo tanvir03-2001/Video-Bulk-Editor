@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {
   BRANDED_VIDEOS_DIR,
+  BRANDING_ASPECT_RATIOS,
   BRANDING_FONT_FAMILIES,
   BRANDING_FONT_WEIGHTS,
   BRANDING_LIMITS,
@@ -9,10 +10,12 @@ import {
   OVERLAY_POSITIONS,
   SUPPORTED_LOGO_EXTENSIONS,
   type BrandingConfig,
+  type BrandingAspectRatio,
   type BrandingFontFamily,
   type BrandingFontWeight,
   type MovingTextSpeed,
   type OverlayPosition,
+  type SideImageConfig,
   type TextLogoConfig,
 } from '../../../shared/branding';
 
@@ -87,6 +90,54 @@ function sanitizeTextLogo(raw: unknown): TextLogoConfig {
   };
 }
 
+function sanitizeSideImage(raw: unknown): SideImageConfig {
+  const source = (raw ?? {}) as Partial<SideImageConfig>;
+  const imagePath =
+    typeof source.imagePath === 'string' && source.imagePath.trim().length > 0
+      ? source.imagePath.trim()
+      : null;
+
+  return {
+    enabled: source.enabled === true,
+    imagePath: imagePath && path.isAbsolute(imagePath) ? imagePath : null,
+  };
+}
+
+function sanitizeCanvasConfig(raw: unknown): BrandingConfig['canvas'] {
+  const source = (raw ?? {}) as Partial<BrandingConfig['canvas']>;
+  const defaults = DEFAULT_BRANDING_CONFIG.canvas;
+
+  return {
+    aspectRatio: sanitizeEnum<BrandingAspectRatio>(
+      source.aspectRatio,
+      BRANDING_ASPECT_RATIOS,
+      defaults.aspectRatio,
+    ),
+    customWidth: clampNumber(
+      source.customWidth,
+      BRANDING_LIMITS.customRatio.min,
+      BRANDING_LIMITS.customRatio.max,
+      defaults.customWidth,
+    ),
+    customHeight: clampNumber(
+      source.customHeight,
+      BRANDING_LIMITS.customRatio.min,
+      BRANDING_LIMITS.customRatio.max,
+      defaults.customHeight,
+    ),
+    zoomPercent: clampNumber(
+      source.zoomPercent,
+      BRANDING_LIMITS.zoomPercent.min,
+      BRANDING_LIMITS.zoomPercent.max,
+      defaults.zoomPercent,
+    ),
+    top: sanitizeSideImage(source.top),
+    bottom: sanitizeSideImage(source.bottom),
+    left: sanitizeSideImage(source.left),
+    right: sanitizeSideImage(source.right),
+  };
+}
+
 /**
  * Normalize an untrusted branding config coming over IPC into a safe, clamped config.
  */
@@ -153,11 +204,17 @@ export function sanitizeBrandingConfig(raw: unknown): BrandingConfig {
         movingTextDefaults.speed,
       ),
     },
+    canvas: sanitizeCanvasConfig(source.canvas),
   };
 }
 
 export function hasAnyBrandingEnabled(config: BrandingConfig): boolean {
-  return config.watermark.enabled || config.movingText.enabled;
+  const canvas = config.canvas;
+  const hasSideImage = [canvas.top, canvas.bottom, canvas.left, canvas.right].some(
+    (side) => side.enabled,
+  );
+  const hasCanvasTransform = canvas.aspectRatio !== 'source' || canvas.zoomPercent !== 100;
+  return config.watermark.enabled || config.movingText.enabled || hasSideImage || hasCanvasTransform;
 }
 
 export function isSupportedLogoExtension(filePath: string): boolean {
@@ -170,7 +227,7 @@ export function isSupportedLogoExtension(filePath: string): boolean {
  */
 export function validateBrandingConfig(config: BrandingConfig): string | null {
   if (!hasAnyBrandingEnabled(config)) {
-    return 'Enable Watermark or Moving Text before generating a preview.';
+    return 'Enable Watermark, Moving Text, a side image, a canvas format, or zoom before rendering.';
   }
 
   if (config.watermark.enabled && config.watermark.mode === 'image') {
@@ -179,6 +236,30 @@ export function validateBrandingConfig(config: BrandingConfig): string | null {
     }
     if (!isSupportedLogoExtension(config.watermark.imagePath)) {
       return `Unsupported logo format. Use ${SUPPORTED_LOGO_EXTENSIONS.join(', ')}.`;
+    }
+  }
+
+  if (config.canvas.aspectRatio === 'custom') {
+    if (config.canvas.customWidth < BRANDING_LIMITS.customRatio.min || config.canvas.customHeight < BRANDING_LIMITS.customRatio.min) {
+      return 'Custom aspect ratio width and height must be greater than zero.';
+    }
+  }
+
+  const sideImages = [
+    ['Top', config.canvas.top],
+    ['Bottom', config.canvas.bottom],
+    ['Left', config.canvas.left],
+    ['Right', config.canvas.right],
+  ] as const;
+  for (const [label, side] of sideImages) {
+    if (!side.enabled) {
+      continue;
+    }
+    if (!side.imagePath) {
+      return `Select an image for the ${label} side.`;
+    }
+    if (!isSupportedLogoExtension(side.imagePath)) {
+      return `Unsupported ${label.toLowerCase()} side image format. Use ${SUPPORTED_LOGO_EXTENSIONS.join(', ')}.`;
     }
   }
 

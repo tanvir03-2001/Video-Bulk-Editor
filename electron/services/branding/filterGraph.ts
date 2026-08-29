@@ -1,4 +1,24 @@
-import type { OverlayPosition } from '../../../shared/branding';
+import type { BrandingSide, OverlayPosition } from '../../../shared/branding';
+
+export interface CanvasFilterPlan {
+  outputWidth: number;
+  outputHeight: number;
+  videoX: number;
+  videoY: number;
+  videoWidth: number;
+  videoHeight: number;
+  zoomPercent: number;
+  backgroundColor: string;
+}
+
+export interface SideImageOverlayPlan {
+  side: BrandingSide;
+  inputIndex: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+}
 
 export interface WatermarkOverlayPlan {
   /** FFmpeg input index of the watermark image (0 is always the source video). */
@@ -19,6 +39,8 @@ export interface MovingTextOverlayPlan {
 }
 
 export interface BrandingFilterGraphOptions {
+  canvas: CanvasFilterPlan;
+  sideImages?: SideImageOverlayPlan[];
   watermark?: WatermarkOverlayPlan | null;
   movingText?: MovingTextOverlayPlan | null;
 }
@@ -82,14 +104,39 @@ export function buildMovingTextExpressions(
 export function buildBrandingFilterGraph(
   options: BrandingFilterGraphOptions,
 ): BrandingFilterGraph | null {
-  const { watermark, movingText } = options;
-  if (!watermark && !movingText) {
+  const { canvas, sideImages = [], watermark, movingText } = options;
+  if (!watermark && !movingText && sideImages.length === 0 && canvas.zoomPercent === 100) {
     return null;
   }
 
   const chains: string[] = [];
-  let currentLabel = '0:v';
   let stageIndex = 0;
+  const outputWidth = Math.max(2, Math.round(canvas.outputWidth));
+  const outputHeight = Math.max(2, Math.round(canvas.outputHeight));
+  const videoWidth = Math.max(2, Math.round(canvas.videoWidth));
+  const videoHeight = Math.max(2, Math.round(canvas.videoHeight));
+  const zoom = Math.max(0.5, Math.min(2, canvas.zoomPercent / 100));
+  const coverWidth = Math.max(2, Math.round(videoWidth * zoom));
+  const coverHeight = Math.max(2, Math.round(videoHeight * zoom));
+  const backgroundColor = canvas.backgroundColor || 'black';
+
+  chains.push(
+    `[0:v]scale=${coverWidth}:${coverHeight}:force_original_aspect_ratio=increase:flags=lanczos,pad=w='max(iw,${videoWidth})':h='max(ih,${videoHeight})':x='(ow-iw)/2':y='(oh-ih)/2':color=${backgroundColor},crop=${videoWidth}:${videoHeight}:(iw-${videoWidth})/2:(ih-${videoHeight})/2,setsar=1,format=rgba,pad=${outputWidth}:${outputHeight}:${Math.round(canvas.videoX)}:${Math.round(canvas.videoY)}:color=${backgroundColor}[canvas0]`,
+  );
+  let currentLabel = 'canvas0';
+
+  for (const sideImage of sideImages) {
+    const imageLabel = `side${sideImage.side}`;
+    chains.push(
+      `[${sideImage.inputIndex}:v]scale=${Math.max(2, Math.round(sideImage.width))}:${Math.max(2, Math.round(sideImage.height))}:force_original_aspect_ratio=decrease:flags=lanczos,format=rgba,pad=${Math.max(2, Math.round(sideImage.width))}:${Math.max(2, Math.round(sideImage.height))}:(ow-iw)/2:(oh-ih)/2:color=${backgroundColor}[${imageLabel}]`,
+    );
+    stageIndex += 1;
+    const nextLabel = `vb${stageIndex}`;
+    chains.push(
+      `[${currentLabel}][${imageLabel}]overlay=x=${Math.round(sideImage.x)}:y=${Math.round(sideImage.y)}:eof_action=repeat:eval=init[${nextLabel}]`,
+    );
+    currentLabel = nextLabel;
+  }
 
   if (watermark) {
     const scaleStep =
@@ -103,7 +150,7 @@ export function buildBrandingFilterGraph(
     const { x, y } = buildPositionExpressions(watermark.position, watermark.marginPx);
     stageIndex += 1;
     const nextLabel = `vb${stageIndex}`;
-    chains.push(`[${currentLabel}][wmimg]overlay=x=${x}:y=${y}:eval=init[${nextLabel}]`);
+    chains.push(`[${currentLabel}][wmimg]overlay=x=${x}:y=${y}:eof_action=repeat:eval=init[${nextLabel}]`);
     currentLabel = nextLabel;
   }
 
@@ -118,12 +165,18 @@ export function buildBrandingFilterGraph(
     );
     stageIndex += 1;
     const nextLabel = `vb${stageIndex}`;
-    chains.push(`[${currentLabel}][mtimg]overlay=x='${x}':y='${y}':eval=frame[${nextLabel}]`);
+    chains.push(
+      `[${currentLabel}][mtimg]overlay=x='${x}':y='${y}':eof_action=repeat:eval=frame[${nextLabel}]`,
+    );
     currentLabel = nextLabel;
   }
 
+  stageIndex += 1;
+  const outputLabel = `vb${stageIndex}`;
+  chains.push(`[${currentLabel}]format=yuv420p[${outputLabel}]`);
+
   return {
     filterComplex: chains.join(';'),
-    outputLabel: currentLabel,
+    outputLabel,
   };
 }

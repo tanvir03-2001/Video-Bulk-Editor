@@ -149,7 +149,7 @@ export class BrandingRunner {
         currentVideoPercent: 100,
         completedVideos: 1,
         elapsedMs: Date.now() - this.startedAt,
-        message: `Preview ready (${result.encoder}, ${info.width}x${info.height})`,
+        message: `Preview ready (${result.encoder}, ${result.outputWidth}x${result.outputHeight}, ${config.canvas.aspectRatio})`,
         logs: this.pushLog(
           'success',
           `[Branding] Preview ready — encoder: ${result.encoder}, text renderer: ${
@@ -242,6 +242,8 @@ export class BrandingRunner {
             video: video.name,
             status: 'branded',
             outputPath: result.outputPath,
+            outputWidth: result.outputWidth,
+            outputHeight: result.outputHeight,
             durationMs: Date.now() - videoStartedAt,
             encoder: result.encoder,
           });
@@ -294,12 +296,12 @@ export class BrandingRunner {
       }
 
       if (this.cancelled) {
-        await this.writeReport(outputFolder, results);
+        await this.writeReport(outputFolder, results, config.canvas.aspectRatio);
         this.finishCancelled();
         return;
       }
 
-      await this.writeReport(outputFolder, results);
+      await this.writeReport(outputFolder, results, config.canvas.aspectRatio);
 
       this.progress = {
         ...this.progress,
@@ -343,7 +345,7 @@ export class BrandingRunner {
       throw new Error(ffmpegStatus.error ?? 'FFmpeg is required for video branding');
     }
     if (!hasAnyBrandingEnabled(config)) {
-      throw new Error('Enable Watermark or Moving Text first.');
+      throw new Error('Enable Watermark, Moving Text, a side image, a canvas format, or zoom first.');
     }
     const invalidReason = validateBrandingConfig(config);
     if (invalidReason) {
@@ -423,6 +425,7 @@ export class BrandingRunner {
   private async writeReport(
     outputFolder: string,
     results: BrandingReportEntry[],
+    outputAspectRatio: BrandingBatchRequest['config']['canvas']['aspectRatio'],
   ): Promise<void> {
     const report: BrandingReport = {
       totalVideos: results.length,
@@ -430,6 +433,7 @@ export class BrandingRunner {
       failedVideos: results.filter((entry) => entry.status === 'failed').length,
       outputFolder,
       encoder: this.progress.encoder ?? 'unknown',
+      outputAspectRatio,
       results,
     };
 

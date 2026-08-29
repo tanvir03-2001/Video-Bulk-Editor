@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { BrandingConfig, BrandingProgress } from '../../../shared/branding';
 import type { ImageClassificationProgress, ProcessingProgress } from '../../../shared/ipc';
 import { Badge, Icon, Panel, ProgressBar, SectionHeading, StatusDot } from '../ui/ui';
@@ -14,6 +15,7 @@ interface InspectorPanelProps {
   classifyAllowPercent: number;
   onVideoAllowPercentChange: (value: number) => void;
   onClassifyAllowPercentChange: (value: number) => void;
+  brandingPreview: ReactNode;
 }
 
 function ThresholdControl({
@@ -69,6 +71,7 @@ export function InspectorPanel({
   classifyAllowPercent,
   onVideoAllowPercentChange,
   onClassifyAllowPercentChange,
+  brandingPreview,
 }: InspectorPanelProps) {
   const busy = processing.status === 'processing' || classification.status === 'classifying' || branding.status === 'processing' || branding.status === 'previewing';
 
@@ -147,15 +150,22 @@ export function InspectorPanel({
 
         {view === 'branding' ? (
           <>
+            <div className="sticky top-0 z-10 -mx-1 bg-surface/95 pb-3 backdrop-blur-sm">
+              {brandingPreview}
+            </div>
             <Panel className="space-y-3 p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-slate-200">Active overlays</p>
-                <Badge tone={brandingConfig.watermark.enabled || brandingConfig.movingText.enabled ? 'success' : 'neutral'}>
-                  {brandingConfig.watermark.enabled || brandingConfig.movingText.enabled ? 'Configured' : 'Not ready'}
+                <Badge tone={hasCanvasChanges(brandingConfig) ? 'success' : 'neutral'}>
+                  {hasCanvasChanges(brandingConfig) ? 'Configured' : 'Not ready'}
                 </Badge>
               </div>
               <InspectorRow label="Watermark" value={brandingConfig.watermark.enabled ? 'Enabled' : 'Off'} />
               <InspectorRow label="Moving text" value={brandingConfig.movingText.enabled ? 'Enabled' : 'Off'} />
+              <InspectorRow label="Side images" value={`${countSideImages(brandingConfig)} / 4`} />
+              <InspectorRow label="Aspect ratio" value={formatAspectRatio(brandingConfig)} />
+              <InspectorRow label="Video zoom" value={`${brandingConfig.canvas.zoomPercent}%`} />
+              <InspectorRow label="Output size" value={formatOutputSize(branding.message)} />
               <InspectorRow label="Videos scanned" value={String(branding.totalVideos)} />
               <InspectorRow label="Output" value={branding.outputFolder ?? 'Default folder'} mono />
             </Panel>
@@ -228,4 +238,32 @@ function InspectorRow({ label, value, mono = false }: { label: string; value: st
       </span>
     </div>
   );
+}
+
+function countSideImages(config: BrandingConfig): number {
+  return [config.canvas.top, config.canvas.bottom, config.canvas.left, config.canvas.right].filter(
+    (side) => side.enabled,
+  ).length;
+}
+
+function hasCanvasChanges(config: BrandingConfig): boolean {
+  return (
+    config.watermark.enabled ||
+    config.movingText.enabled ||
+    countSideImages(config) > 0 ||
+    config.canvas.aspectRatio !== 'source' ||
+    config.canvas.zoomPercent !== 100
+  );
+}
+
+function formatAspectRatio(config: BrandingConfig): string {
+  return config.canvas.aspectRatio === 'custom'
+    ? `${config.canvas.customWidth}:${config.canvas.customHeight}`
+    : config.canvas.aspectRatio === 'source'
+      ? 'Original'
+      : config.canvas.aspectRatio;
+}
+
+function formatOutputSize(message: string | null): string {
+  return message?.match(/\b\d+x\d+\b/)?.[0] ?? 'Calculated on render';
 }

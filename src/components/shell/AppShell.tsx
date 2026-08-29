@@ -25,7 +25,7 @@ export function AppShell({
         <aside className="shrink-0">{sidebar}</aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="shrink-0">{toolbar}</header>
-          <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_276px]">
+          <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px]">
             <main className="min-w-0 overflow-y-auto">{children}</main>
             <aside className="hidden min-h-0 border-l border-surface-border bg-surface/70 xl:block">
               {inspector}

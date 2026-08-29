@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { BrandingProgress } from '../../../shared/branding';
+import {
+  BRANDING_ASPECT_RATIO_LABELS,
+  type BrandingAspectRatio,
+  type BrandingProgress,
+} from '../../../shared/branding';
 import type { VideoFile } from '../../../shared/ipc';
 import { Button, Panel } from '../ui/ui';
 
@@ -9,6 +13,10 @@ interface BrandingPreviewProps {
   previewVideoPath: string | null;
   previewUrl: string | null;
   outputFolder: string | null;
+  aspectRatio: BrandingAspectRatio;
+  customWidth: number;
+  customHeight: number;
+  zoomPercent: number;
   canPreview: boolean;
   canApply: boolean;
   canCancel: boolean;
@@ -29,6 +37,10 @@ export function BrandingPreview({
   previewVideoPath,
   previewUrl,
   outputFolder,
+  aspectRatio,
+  customWidth,
+  customHeight,
+  zoomPercent,
   canPreview,
   canApply,
   canCancel,
@@ -43,6 +55,15 @@ export function BrandingPreview({
   const [playbackError, setPlaybackError] = useState(false);
   const canRetryPreview =
     canPreview && (progress.status === 'error' || playbackError);
+  const renderedSize = progress.message?.match(/\b(\d+)x(\d+)\b/);
+  const previewAspectRatio =
+    aspectRatio === 'source'
+      ? renderedSize
+        ? `${renderedSize[1]} / ${renderedSize[2]}`
+        : '16 / 9'
+      : aspectRatio === 'custom'
+        ? `${customWidth} / ${customHeight}`
+        : aspectRatio.replace(':', ' / ');
 
   useEffect(() => {
     setPlaybackError(false);
@@ -94,7 +115,10 @@ export function BrandingPreview({
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-surface-border bg-black shadow-inner">
+      <div
+        className="relative w-full overflow-hidden rounded-lg border border-surface-border bg-surface shadow-inner"
+        style={{ aspectRatio: previewAspectRatio }}
+      >
         {previewUrl && !playbackError ? (
           <video
             key={previewUrl}
@@ -107,15 +131,15 @@ export function BrandingPreview({
             onError={() => {
               setPlaybackError(true);
             }}
-            className="aspect-video max-h-64 w-full bg-black object-contain"
+            className="block h-full w-full object-cover"
           />
         ) : previewUrl && playbackError ? (
-          <div className="flex aspect-video max-h-64 items-center justify-center px-3 text-center text-xs leading-relaxed text-rose-200">
+          <div className="flex h-full items-center justify-center px-3 text-center text-xs leading-relaxed text-rose-200">
             The preview clip was created but could not be played here. It is saved as an MP4 in
             your system temp folder.
           </div>
         ) : (
-          <div className="flex aspect-video max-h-64 items-center justify-center px-3 text-center text-xs leading-relaxed text-slate-400">
+          <div className="flex h-full items-center justify-center px-3 text-center text-xs leading-relaxed text-slate-400">
             {progress.status === 'previewing'
               ? `Updating live preview… ${Math.round(progress.currentVideoPercent)}%`
               : hasPreview
@@ -126,7 +150,12 @@ export function BrandingPreview({
       </div>
 
       <div>
-        <p className="text-xs font-medium text-slate-300">Output Folder</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-slate-300">Output Folder</p>
+          <span className="text-[11px] text-slate-500">
+            {BRANDING_ASPECT_RATIO_LABELS[aspectRatio]} · {zoomPercent}% zoom
+          </span>
+        </div>
         <p
           className="mt-1 truncate font-mono text-xs leading-relaxed text-slate-400"
           title={outputFolder ?? undefined}

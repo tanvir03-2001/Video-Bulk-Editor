@@ -127,16 +127,18 @@ Section **3. Video Branding** adds a lightweight branding pass that runs entirel
 
 - **Watermark** — either an **Image Logo** (PNG with transparency works best; JPG/WEBP also supported) or a **Text Logo** rendered locally to a transparent PNG. Configure position (9 anchors), size, opacity, edge margin, and for text: font, size, weight, colour, and shadow.
 - **Moving Text** — a subtle overlay that drifts smoothly across the frame on a slow sine path with different horizontal and vertical periods, so it never jumps and always stays fully inside the frame. Speed presets: Very Slow (default), Slow, Normal.
+- **Canvas & Side Images** — choose Original or social-friendly output ratios (`1:1`, `4:5`, `9:16`, `16:9`, `4:3`, `3:4`, `2:3`, `3:2`, `21:9`) or enter a custom ratio. Enable any combination of Top, Bottom, Left, and Right image bands; top/bottom images fit the canvas width and left/right images fit the video height while preserving their aspect ratio.
+- **Video Zoom** — use 50%–200% zoom before the video is placed into the selected canvas. Zoom above 100% crops in; zoom below 100% scales the video down inside the center area.
 - **Preview** — pick any scanned video and enable an overlay. A real 5-second clip is rendered automatically after settings settle, using the exact same filter graph and encoder settings as the final output, then played back in the app. Adjust settings to refresh the live preview; a retry action is available if a render fails.
 - **Apply to All Videos** — processes the folder sequentially. Each video fails independently, so a corrupted file is logged and skipped without stopping the batch.
 
 Details:
 
-- Every enabled overlay is applied in a **single `-filter_complex` with one encode pass**; resolution, aspect ratio, and orientation are unchanged (rotated videos are detected and sized correctly).
+- Every enabled canvas, side image, and branding overlay is applied in a **single `-filter_complex` with one encode pass**. The original video long edge is preserved when calculating the selected output ratio; rotated videos are detected and sized correctly. Watermark and moving text are applied last, above every side image.
 - Encoding tries a hardware encoder (`h264_nvenc` / `h264_qsv` / `h264_amf`) when available and automatically falls back to `libx264 -crf 18`. Audio is copied, falling back to AAC when the source stream cannot be remuxed.
 - Overlay sizes are percentages of the video's own width/height, so mixed-resolution folders stay visually consistent.
 - Output goes to `{SelectedFolder}/Branded Videos/` by default, or any folder chosen with **Change Output Folder**. Name collisions get a `_02`, `_03`, … suffix, and the output folder can never be the source folder.
-- A `branding-report.json` is written to the output folder with per-video status, duration, encoder, and failure reason.
+- A `branding-report.json` is written to the output folder with per-video status, output dimensions, duration, encoder, selected output ratio, and failure reason.
 - Branding, frame extraction, and classification are mutually exclusive — only one job runs at a time.
 
 ## How the Application Works

@@ -250,7 +250,7 @@ function registerBrandingHandlers(): void {
     }
 
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Select Logo Image',
+      title: 'Select Branding Image',
       properties: ['openFile'],
       filters: [{ name: 'Images', extensions: SUPPORTED_LOGO_EXTENSIONS }],
     });

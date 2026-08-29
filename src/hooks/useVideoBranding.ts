@@ -3,8 +3,11 @@ import {
   DEFAULT_BRANDING_CONFIG,
   INITIAL_BRANDING_PROGRESS,
   type BrandingConfig,
+  type BrandingCanvasConfig,
   type BrandingProgress,
+  type BrandingSide,
   type MovingTextConfig,
+  type SideImageConfig,
   type WatermarkConfig,
 } from '../../shared/branding';
 import type { VideoFile } from '../../shared/ipc';
@@ -99,6 +102,23 @@ export function useVideoBranding(otherJobActive: boolean) {
     setConfig((current) => ({ ...current, movingText: { ...current.movingText, ...patch } }));
   }, []);
 
+  const updateCanvas = useCallback((patch: Partial<BrandingCanvasConfig>) => {
+    setConfig((current) => ({ ...current, canvas: { ...current.canvas, ...patch } }));
+  }, []);
+
+  const updateSideImage = useCallback(
+    (side: BrandingSide, patch: Partial<SideImageConfig>) => {
+      setConfig((current) => ({
+        ...current,
+        canvas: {
+          ...current.canvas,
+          [side]: { ...current.canvas[side], ...patch },
+        },
+      }));
+    },
+    [],
+  );
+
   const selectFolder = useCallback(async () => {
     setBusy(true);
     setError(null);
@@ -141,6 +161,16 @@ export function useVideoBranding(otherJobActive: boolean) {
     }
   }, [updateWatermark]);
 
+  const selectSideImage = useCallback(
+    async (side: BrandingSide) => {
+      const selected = await window.api.selectBrandingLogo();
+      if (selected) {
+        updateSideImage(side, { imagePath: selected, enabled: true });
+      }
+    },
+    [updateSideImage],
+  );
+
   const selectOutputFolder = useCallback(async () => {
     const selected = await window.api.selectBrandingOutputFolder();
     if (selected) {
@@ -156,10 +186,24 @@ export function useVideoBranding(otherJobActive: boolean) {
   }, [folder]);
 
   const isBranding = progress.status === 'processing' || progress.status === 'previewing';
-  const brandingEnabled = config.watermark.enabled || config.movingText.enabled;
+  const sideImagesEnabled = [
+    config.canvas.top,
+    config.canvas.bottom,
+    config.canvas.left,
+    config.canvas.right,
+  ].some((side) => side.enabled);
+  const canvasEnabled =
+    sideImagesEnabled || config.canvas.aspectRatio !== 'source' || config.canvas.zoomPercent !== 100;
+  const brandingEnabled = config.watermark.enabled || config.movingText.enabled || canvasEnabled;
   const logoMissing =
     config.watermark.enabled && config.watermark.mode === 'image' && !config.watermark.imagePath;
-  const configReady = brandingEnabled && !logoMissing;
+  const sideImageMissing = [
+    config.canvas.top,
+    config.canvas.bottom,
+    config.canvas.left,
+    config.canvas.right,
+  ].some((side) => side.enabled && !side.imagePath);
+  const configReady = brandingEnabled && !logoMissing && !sideImageMissing;
   const previewSignature = JSON.stringify({ videoPath: previewVideoPath, config });
 
   const startPreviewRender = useCallback(
@@ -256,8 +300,11 @@ export function useVideoBranding(otherJobActive: boolean) {
     updateWatermark,
     updateWatermarkText,
     updateMovingText,
+    updateCanvas,
+    updateSideImage,
     selectFolder,
     selectLogo,
+    selectSideImage,
     selectOutputFolder,
     resetOutputFolder,
     generatePreview,

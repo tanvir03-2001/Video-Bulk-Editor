@@ -28,7 +28,7 @@ export function BrandingWorkspace({ branding }: { branding: VideoBrandingControl
         </Panel>
       ) : null}
 
-      <VideoBrandingPanel branding={branding} />
+      <VideoBrandingPanel branding={branding} showPreview={false} />
 
       <WorkflowProgressCard
         icon="logo"

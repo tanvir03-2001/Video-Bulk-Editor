@@ -29,6 +29,67 @@ export type MovingTextSpeed = 'very-slow' | 'slow' | 'normal';
 
 export const MOVING_TEXT_SPEEDS: MovingTextSpeed[] = ['very-slow', 'slow', 'normal'];
 
+export type BrandingAspectRatio =
+  | 'source'
+  | '1:1'
+  | '4:5'
+  | '9:16'
+  | '16:9'
+  | '4:3'
+  | '3:4'
+  | '2:3'
+  | '3:2'
+  | '21:9'
+  | 'custom';
+
+export const BRANDING_ASPECT_RATIOS: BrandingAspectRatio[] = [
+  'source',
+  '1:1',
+  '4:5',
+  '9:16',
+  '16:9',
+  '4:3',
+  '3:4',
+  '2:3',
+  '3:2',
+  '21:9',
+  'custom',
+];
+
+export const BRANDING_ASPECT_RATIO_LABELS: Record<BrandingAspectRatio, string> = {
+  source: 'Original',
+  '1:1': '1:1 · Square',
+  '4:5': '4:5 · Feed portrait',
+  '9:16': '9:16 · Story / Reel',
+  '16:9': '16:9 · Landscape',
+  '4:3': '4:3 · Classic',
+  '3:4': '3:4 · Portrait',
+  '2:3': '2:3 · Portrait',
+  '3:2': '3:2 · Landscape',
+  '21:9': '21:9 · Wide',
+  custom: 'Custom ratio',
+};
+
+export type BrandingSide = 'top' | 'bottom' | 'left' | 'right';
+
+export interface SideImageConfig {
+  enabled: boolean;
+  /** Absolute path to a PNG/JPG/JPEG/WEBP image. */
+  imagePath: string | null;
+}
+
+export interface BrandingCanvasConfig {
+  aspectRatio: BrandingAspectRatio;
+  customWidth: number;
+  customHeight: number;
+  /** 100 is a normal fit, above 100 crops in, below 100 scales down. */
+  zoomPercent: number;
+  top: SideImageConfig;
+  bottom: SideImageConfig;
+  left: SideImageConfig;
+  right: SideImageConfig;
+}
+
 /**
  * Horizontal / vertical drift periods in seconds. Different periods keep the
  * path smooth while wandering across different areas instead of looping tightly.
@@ -104,6 +165,7 @@ export interface MovingTextConfig {
 export interface BrandingConfig {
   watermark: WatermarkConfig;
   movingText: MovingTextConfig;
+  canvas: BrandingCanvasConfig;
 }
 
 export const BRANDING_LIMITS = {
@@ -113,7 +175,25 @@ export const BRANDING_LIMITS = {
   textFontSizePercent: { min: 2, max: 25, step: 1 },
   movingTextOpacityPercent: { min: 3, max: 60, step: 1 },
   movingTextSizePercent: { min: 2, max: 20, step: 1 },
+  customRatio: { min: 1, max: 10000, step: 1 },
+  zoomPercent: { min: 50, max: 200, step: 5 },
 } as const;
+
+export const DEFAULT_SIDE_IMAGE_CONFIG: SideImageConfig = {
+  enabled: false,
+  imagePath: null,
+};
+
+export const DEFAULT_BRANDING_CANVAS_CONFIG: BrandingCanvasConfig = {
+  aspectRatio: 'source',
+  customWidth: 16,
+  customHeight: 9,
+  zoomPercent: 100,
+  top: DEFAULT_SIDE_IMAGE_CONFIG,
+  bottom: DEFAULT_SIDE_IMAGE_CONFIG,
+  left: DEFAULT_SIDE_IMAGE_CONFIG,
+  right: DEFAULT_SIDE_IMAGE_CONFIG,
+};
 
 export const DEFAULT_TEXT_LOGO_CONFIG: TextLogoConfig = {
   text: 'Smooth',
@@ -147,6 +227,7 @@ export const DEFAULT_MOVING_TEXT_CONFIG: MovingTextConfig = {
 export const DEFAULT_BRANDING_CONFIG: BrandingConfig = {
   watermark: DEFAULT_WATERMARK_CONFIG,
   movingText: DEFAULT_MOVING_TEXT_CONFIG,
+  canvas: DEFAULT_BRANDING_CANVAS_CONFIG,
 };
 
 export const BRANDED_VIDEOS_DIR = 'Branded Videos';
@@ -239,6 +320,8 @@ export interface BrandingReportEntry {
   video: string;
   status: 'branded' | 'failed';
   outputPath?: string;
+  outputWidth?: number;
+  outputHeight?: number;
   durationMs: number;
   encoder: string;
   reason?: string;
@@ -250,5 +333,6 @@ export interface BrandingReport {
   failedVideos: number;
   outputFolder: string;
   encoder: string;
+  outputAspectRatio: BrandingAspectRatio;
   results: BrandingReportEntry[];
 }

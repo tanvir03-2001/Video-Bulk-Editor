@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppShell } from './components/shell/AppShell';
+import { BrandingPreview } from './components/branding/BrandingPreview';
 import { InspectorPanel } from './components/shell/InspectorPanel';
 import { Sidebar, type AppView } from './components/shell/Sidebar';
 import { StatusBar } from './components/shell/StatusBar';
@@ -417,6 +418,38 @@ export default function App() {
           classifyAllowPercent={imageClassification.allowPercent}
           onVideoAllowPercentChange={setAllowPercent}
           onClassifyAllowPercentChange={imageClassification.setAllowPercent}
+          brandingPreview={
+            <BrandingPreview
+              progress={branding.progress}
+              videos={branding.videos}
+              previewVideoPath={branding.previewVideoPath}
+              previewUrl={branding.previewUrl}
+              outputFolder={branding.outputFolder}
+              aspectRatio={branding.config.canvas.aspectRatio}
+              customWidth={branding.config.canvas.customWidth}
+              customHeight={branding.config.canvas.customHeight}
+              zoomPercent={branding.config.canvas.zoomPercent}
+              canPreview={branding.canPreview}
+              canApply={branding.canApply}
+              canCancel={branding.canCancel}
+              onPreviewVideoChange={branding.setPreviewVideoPath}
+              onGeneratePreview={() => {
+                void branding.generatePreview();
+              }}
+              onApplyToAll={() => {
+                void branding.applyToAll();
+              }}
+              onCancel={() => {
+                void branding.cancel();
+              }}
+              onSelectOutputFolder={() => {
+                void branding.selectOutputFolder();
+              }}
+              onResetOutputFolder={() => {
+                void branding.resetOutputFolder();
+              }}
+            />
+          }
         />
       }
       statusBar={
