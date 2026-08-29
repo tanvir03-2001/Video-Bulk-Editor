@@ -5,6 +5,7 @@ interface ProgressPanelProps {
   isProcessing: boolean;
   activityLabel?: string;
   stepLabel?: string | null;
+  estimatedRemaining?: string;
 }
 
 export function ProgressPanel({
@@ -14,6 +15,7 @@ export function ProgressPanel({
   isProcessing,
   activityLabel = 'Current',
   stepLabel = null,
+  estimatedRemaining,
 }: ProgressPanelProps) {
   const clamped = Math.max(0, Math.min(100, progressPercent));
 
@@ -28,11 +30,16 @@ export function ProgressPanel({
             <span className="truncate rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-sky-300">{stepLabel}</span>
           ) : null}
         </div>
-        {isProcessing && currentImageTotal > 0 ? (
-          <span className="shrink-0 tabular-nums tracking-readable text-slate-300">
-            {activityLabel} {currentImageIndex}/{currentImageTotal}
-          </span>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-3">
+          {isProcessing && currentImageTotal > 0 ? (
+            <span className="tabular-nums tracking-readable text-slate-300">
+              {activityLabel} {currentImageIndex}/{currentImageTotal}
+            </span>
+          ) : null}
+          {estimatedRemaining ? (
+            <span className="font-medium text-sky-300">{estimatedRemaining}</span>
+          ) : null}
+        </div>
       </div>
       <div
         className="h-2 overflow-hidden rounded-full bg-slate-800"

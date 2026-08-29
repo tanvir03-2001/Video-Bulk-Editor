@@ -6,9 +6,11 @@ interface TopToolbarProps {
   view: AppView;
   jobActive: boolean;
   statusLabel: string;
+  theme: 'dark' | 'light';
   primaryAction?: { label: string; icon: IconName; onClick: () => void; disabled?: boolean };
   secondaryAction?: { label: string; icon: IconName; onClick: () => void; disabled?: boolean };
   onActivity: () => void;
+  onToggleTheme: () => void;
 }
 
 const viewTitles: Record<AppView, string> = {
@@ -23,9 +25,11 @@ export function TopToolbar({
   view,
   jobActive,
   statusLabel,
+  theme,
   primaryAction,
   secondaryAction,
   onActivity,
+  onToggleTheme,
 }: TopToolbarProps) {
   return (
     <div className="flex min-h-14 items-center justify-between gap-3 border-b border-surface-border bg-surface/95 px-4 lg:px-5">
@@ -67,6 +71,11 @@ export function TopToolbar({
           />
         ) : null}
         <IconButton icon="activity" label="Open activity" onClick={onActivity} />
+        <IconButton
+          icon={theme === 'dark' ? 'sun' : 'moon'}
+          label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          onClick={onToggleTheme}
+        />
         <IconButton icon="settings" label="Settings" disabled />
         <IconButton icon="more" label="More options" disabled />
       </div>

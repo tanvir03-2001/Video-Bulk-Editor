@@ -5,10 +5,10 @@ module.exports = {
     extend: {
       colors: {
         surface: {
-          DEFAULT: '#12141a',
-          raised: '#1a1d27',
-          border: '#2a2f3d',
-          hover: '#202532',
+          DEFAULT: 'rgb(var(--app-surface) / <alpha-value>)',
+          raised: 'rgb(var(--app-surface-raised) / <alpha-value>)',
+          border: 'rgb(var(--app-surface-border) / <alpha-value>)',
+          hover: 'rgb(var(--app-surface-hover) / <alpha-value>)',
         },
         accent: {
           DEFAULT: '#3b82f6',

@@ -1,6 +1,7 @@
 import { VideoBrandingPanel } from '../branding/VideoBrandingPanel';
 import type { VideoBrandingController } from '../../hooks/useVideoBranding';
 import { Panel, SectionHeading, StatCard } from '../ui/ui';
+import { WorkflowProgressCard } from '../ui/WorkflowProgressCard';
 
 export function BrandingWorkspace({ branding }: { branding: VideoBrandingController }) {
   return (
@@ -28,6 +29,33 @@ export function BrandingWorkspace({ branding }: { branding: VideoBrandingControl
       ) : null}
 
       <VideoBrandingPanel branding={branding} />
+
+      <WorkflowProgressCard
+        icon="logo"
+        title="Branding progress"
+        description="Preview or batch encoding status for the selected source"
+        status={branding.progress.status}
+        statusLabel={brandingStatusLabel(branding.progress.status)}
+        progressPercent={branding.progress.progressPercent}
+        currentFile={branding.progress.currentFile}
+        currentStep={
+          branding.progress.jobKind === 'preview'
+            ? 'Rendering live preview'
+            : branding.progress.jobKind === 'batch'
+              ? 'Applying branding'
+              : null
+        }
+        completed={branding.progress.completedVideos}
+        total={branding.progress.totalVideos}
+        failed={branding.progress.failedVideos}
+        active={branding.isBranding}
+        elapsedMs={branding.progress.elapsedMs}
+        message={branding.progress.message}
+      />
     </div>
   );
+}
+
+function brandingStatusLabel(status: string): string {
+  return status === 'no_videos' ? 'No videos' : status.replace('_', ' ').replace(/^\w/, (value) => value.toUpperCase());
 }

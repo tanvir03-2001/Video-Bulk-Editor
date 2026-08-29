@@ -13,6 +13,7 @@ import { ClassificationWorkspace } from './components/workspaces/ClassificationW
 import { FramesWorkspace } from './components/workspaces/FramesWorkspace';
 import { OverviewWorkspace } from './components/workspaces/OverviewWorkspace';
 import type { ProcessingStatus } from './types/processing';
+import { formatEstimatedRemaining } from './utils/progress';
 
 type JobFocus = 'video' | 'classify' | 'branding';
 
@@ -138,25 +139,38 @@ export default function App() {
   const jobActive = isProcessing || classifyActive || brandingActive;
   const [activeView, setActiveView] = useState<AppView>('overview');
   const [jobFocus, setJobFocus] = useState<JobFocus>('video');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      const stored = window.localStorage.getItem('frame-studio-theme');
+      return stored === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('frame-studio-theme', theme);
+    } catch {
+      // Theme preference is optional and should never interrupt processing.
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (isProcessing) {
       setJobFocus('video');
-      setActiveView('activity');
     }
   }, [isProcessing]);
 
   useEffect(() => {
     if (classifyActive) {
       setJobFocus('classify');
-      setActiveView('activity');
     }
   }, [classifyActive]);
 
   useEffect(() => {
     if (brandingActive) {
       setJobFocus('branding');
-      setActiveView('activity');
     }
   }, [brandingActive]);
 
@@ -332,6 +346,7 @@ export default function App() {
             currentImageTotal={displayImageTotal}
             isProcessing={jobActive}
             activityLabel={showBranding ? 'Video' : activityLabel}
+            estimatedRemaining={formatEstimatedRemaining(displayElapsed, displayPercent, jobActive)}
             stepLabel={
               showBranding
                 ? brandingActive
@@ -366,6 +381,7 @@ export default function App() {
 
   return (
     <AppShell
+      theme={theme}
       sidebar={
         <Sidebar
           activeView={activeView}
@@ -381,9 +397,13 @@ export default function App() {
           view={activeView}
           jobActive={jobActive}
           statusLabel={displayStatusLabel}
+          theme={theme}
           primaryAction={toolbarAction}
           secondaryAction={toolbarAction}
           onActivity={() => setActiveView('activity')}
+          onToggleTheme={() => {
+            setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
+          }}
         />
       }
       inspector={

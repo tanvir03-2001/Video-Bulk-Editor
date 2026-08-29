@@ -41,6 +41,8 @@ export function BrandingPreview({
 }: BrandingPreviewProps) {
   const hasPreview = Boolean(previewUrl);
   const [playbackError, setPlaybackError] = useState(false);
+  const canRetryPreview =
+    canPreview && (progress.status === 'error' || playbackError);
 
   useEffect(() => {
     setPlaybackError(false);
@@ -69,14 +71,11 @@ export function BrandingPreview({
       </select>
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant="primary"
-          icon="refresh"
-          onClick={onGeneratePreview}
-          disabled={!canPreview}
-        >
-          {hasPreview ? 'Regenerate Preview' : 'Generate Preview'}
-        </Button>
+        {canRetryPreview ? (
+          <Button variant="secondary" icon="refresh" onClick={onGeneratePreview}>
+            Retry Preview
+          </Button>
+        ) : null}
         <Button
           variant="success"
           icon="play"
@@ -118,8 +117,10 @@ export function BrandingPreview({
         ) : (
           <div className="flex aspect-video max-h-64 items-center justify-center px-3 text-center text-xs leading-relaxed text-slate-400">
             {progress.status === 'previewing'
-              ? `Rendering 5-second preview… ${Math.round(progress.currentVideoPercent)}%`
-              : 'Generate a preview to see the branding on a real 5-second clip.'}
+              ? `Updating live preview… ${Math.round(progress.currentVideoPercent)}%`
+              : hasPreview
+                ? 'Live preview — changes update automatically.'
+                : 'Enable an overlay to start the live preview.'}
           </div>
         )}
       </div>

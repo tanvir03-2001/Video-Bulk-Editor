@@ -15,6 +15,7 @@ export type IconName =
   | 'info'
   | 'layers'
   | 'logo'
+  | 'moon'
   | 'minus'
   | 'more'
   | 'play'
@@ -23,6 +24,7 @@ export type IconName =
   | 'settings'
   | 'spark'
   | 'stop'
+  | 'sun'
   | 'video';
 
 interface IconProps {
@@ -92,6 +94,7 @@ const paths: Record<IconName, JSX.Element> = {
       <path d="M12 3 14 9l6 2-6 2-2 6-2-6-6-2 6-2z" />
     </>
   ),
+  moon: <path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z" />,
   minus: <path d="M5 12h14" />,
   more: (
     <>
@@ -122,6 +125,12 @@ const paths: Record<IconName, JSX.Element> = {
     </>
   ),
   stop: <rect x="7" y="7" width="10" height="10" rx="1" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 2.5v2M12 19.5v2M4.8 4.8l1.4 1.4M17.8 17.8l1.4 1.4M2.5 12h2M19.5 12h2M4.8 19.2l1.4-1.4M17.8 6.2l1.4-1.4" />
+    </>
+  ),
   video: (
     <>
       <rect x="3" y="5" width="13" height="14" rx="2" />

@@ -158,17 +158,53 @@ export function WatermarkSettings({
         </div>
       ) : (
         <div className="space-y-2">
+          <label htmlFor="wm-primary-text" className={fieldLabel}>
+            Primary text
+          </label>
           <input
+            id="wm-primary-text"
             type="text"
             value={config.text.text}
             disabled={controlsDisabled}
             maxLength={120}
-            placeholder="Your brand name"
+            placeholder="Smooth"
             onChange={(event) => {
               onTextChange({ text: event.target.value });
             }}
             className={inputBase}
           />
+          <label htmlFor="wm-secondary-text" className={fieldLabel}>
+            Secondary text <span className="font-normal text-slate-500">(optional)</span>
+          </label>
+          <input
+            id="wm-secondary-text"
+            type="text"
+            value={config.text.secondaryText}
+            disabled={controlsDisabled}
+            maxLength={120}
+            placeholder="Radio"
+            onChange={(event) => {
+              onTextChange({ secondaryText: event.target.value });
+            }}
+            className={inputBase}
+          />
+          <div
+            className="rounded-md border border-surface-border bg-black/30 px-3 py-2.5 text-right"
+            aria-label="Text logo preview"
+          >
+            <p className="text-2xl font-bold leading-none tracking-tight text-white">
+              {config.text.text || 'Smooth'}
+            </p>
+            {config.text.secondaryText ? (
+              <p className="mt-0.5 pr-0.5 text-sm font-semibold leading-none text-white">
+                {config.text.secondaryText}
+              </p>
+            ) : null}
+          </div>
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            The secondary line is rendered smaller and aligned to the right, like a broadcast
+            station lockup.
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={config.text.fontFamily}

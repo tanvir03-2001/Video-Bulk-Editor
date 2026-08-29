@@ -26,6 +26,7 @@ export function useVideoBranding(otherJobActive: boolean) {
 
   const previewUrlRef = useRef<string | null>(null);
   const loadedPreviewPath = useRef<string | null>(null);
+  const lastPreviewSignature = useRef<string | null>(null);
 
   const replacePreviewUrl = useCallback((nextUrl: string | null) => {
     if (previewUrlRef.current) {
@@ -154,19 +155,68 @@ export function useVideoBranding(otherJobActive: boolean) {
     setOutputFolder(await window.api.resolveBrandingOutputFolder(folder));
   }, [folder]);
 
+  const isBranding = progress.status === 'processing' || progress.status === 'previewing';
+  const brandingEnabled = config.watermark.enabled || config.movingText.enabled;
+  const logoMissing =
+    config.watermark.enabled && config.watermark.mode === 'image' && !config.watermark.imagePath;
+  const configReady = brandingEnabled && !logoMissing;
+  const previewSignature = JSON.stringify({ videoPath: previewVideoPath, config });
+
+  const startPreviewRender = useCallback(
+    async (signature: string) => {
+      if (!previewVideoPath) {
+        return;
+      }
+      lastPreviewSignature.current = signature;
+      setError(null);
+      replacePreviewUrl(null);
+      loadedPreviewPath.current = null;
+      try {
+        await window.api.startBrandingPreview({ videoPath: previewVideoPath, config });
+      } catch (startError) {
+        setError(startError instanceof Error ? startError.message : 'Unable to start preview');
+      }
+    },
+    [previewVideoPath, config, replacePreviewUrl],
+  );
+
+  // Keep the preview in sync with settings without making the user press a render button.
+  // The debounce prevents an FFmpeg render for every keystroke while editing text.
+  useEffect(() => {
+    if (
+      !previewVideoPath ||
+      !configReady ||
+      busy ||
+      otherJobActive ||
+      isBranding ||
+      lastPreviewSignature.current === previewSignature
+    ) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void startPreviewRender(previewSignature);
+    }, 650);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [
+    previewVideoPath,
+    previewSignature,
+    configReady,
+    busy,
+    otherJobActive,
+    isBranding,
+    startPreviewRender,
+  ]);
+
   const generatePreview = useCallback(async () => {
     if (!previewVideoPath) {
       return;
     }
-    setError(null);
-    replacePreviewUrl(null);
-    loadedPreviewPath.current = null;
-    try {
-      await window.api.startBrandingPreview({ videoPath: previewVideoPath, config });
-    } catch (startError) {
-      setError(startError instanceof Error ? startError.message : 'Unable to start preview');
-    }
-  }, [previewVideoPath, config, replacePreviewUrl]);
+    await startPreviewRender(previewSignature);
+  }, [previewVideoPath, previewSignature, startPreviewRender]);
 
   const applyToAll = useCallback(async () => {
     if (!folder || !outputFolder || videos.length === 0) {
@@ -184,11 +234,6 @@ export function useVideoBranding(otherJobActive: boolean) {
     await window.api.cancelBranding();
   }, []);
 
-  const isBranding = progress.status === 'processing' || progress.status === 'previewing';
-  const brandingEnabled = config.watermark.enabled || config.movingText.enabled;
-  const logoMissing =
-    config.watermark.enabled && config.watermark.mode === 'image' && !config.watermark.imagePath;
-  const configReady = brandingEnabled && !logoMissing;
   const idle = !isBranding && !busy && !otherJobActive;
 
   return {

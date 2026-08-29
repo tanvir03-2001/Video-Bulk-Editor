@@ -228,12 +228,17 @@ async function prepareOverlayAssets(
     } else {
       watermarkPath = await renderTextOverlayAsset({
         text: config.watermark.text.text,
+        secondaryText: config.watermark.text.secondaryText,
         fontFamily: config.watermark.text.fontFamily,
         fontWeight: config.watermark.text.fontWeight,
         color: config.watermark.text.color,
         fontSizePx: Math.max(
           8,
           Math.round((videoInfo.height * config.watermark.text.fontSizePercent) / 100),
+        ),
+        secondaryFontSizePx: Math.max(
+          4,
+          Math.round((videoInfo.height * config.watermark.text.fontSizePercent * 0.38) / 100),
         ),
         maxWidthPx: Math.round(videoInfo.width * 0.9),
         shadow: config.watermark.text.shadow,

@@ -127,7 +127,7 @@ Section **3. Video Branding** adds a lightweight branding pass that runs entirel
 
 - **Watermark** — either an **Image Logo** (PNG with transparency works best; JPG/WEBP also supported) or a **Text Logo** rendered locally to a transparent PNG. Configure position (9 anchors), size, opacity, edge margin, and for text: font, size, weight, colour, and shadow.
 - **Moving Text** — a subtle overlay that drifts smoothly across the frame on a slow sine path with different horizontal and vertical periods, so it never jumps and always stays fully inside the frame. Speed presets: Very Slow (default), Slow, Normal.
-- **Preview** — pick any scanned video and click **Generate Preview**. A real 5-second clip is rendered with the exact same filter graph and encoder settings as the final output, then played back in the app. Adjust settings and **Regenerate Preview** as often as needed.
+- **Preview** — pick any scanned video and enable an overlay. A real 5-second clip is rendered automatically after settings settle, using the exact same filter graph and encoder settings as the final output, then played back in the app. Adjust settings to refresh the live preview; a retry action is available if a render fails.
 - **Apply to All Videos** — processes the folder sequentially. Each video fails independently, so a corrupted file is logged and skipped without stopping the batch.
 
 Details:

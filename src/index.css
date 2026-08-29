@@ -4,6 +4,10 @@
 
 :root {
   color-scheme: dark;
+  --app-surface: 18 20 26;
+  --app-surface-raised: 26 29 39;
+  --app-surface-border: 42 47 61;
+  --app-surface-hover: 32 37 50;
 }
 
 html,
@@ -15,7 +19,7 @@ body,
 
 body {
   margin: 0;
-  background: #12141a;
+  background: rgb(var(--app-surface));
   color: #eef1f6;
   font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
   font-size: 14px;
@@ -25,6 +29,116 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+.theme-light {
+  color-scheme: light;
+  --app-surface: 226 231 237;
+  --app-surface-raised: 246 248 250;
+  --app-surface-border: 194 202 212;
+  --app-surface-hover: 215 222 230;
+}
+
+.theme-light .text-white:not(button) {
+  color: #0f172a;
+}
+
+.theme-light .text-slate-100 {
+  color: #0f172a;
+}
+
+.theme-light .text-slate-200 {
+  color: #1e293b;
+}
+
+.theme-light .text-slate-300 {
+  color: #334155;
+}
+
+.theme-light .text-slate-400 {
+  color: #475569;
+}
+
+.theme-light .text-slate-500 {
+  color: #475569;
+}
+
+.theme-light .text-slate-600 {
+  color: #64748b;
+}
+
+.theme-light .text-sky-300 {
+  color: #0369a1;
+}
+
+.theme-light nav {
+  background: #1d2735;
+  border-color: #334155;
+}
+
+.theme-light nav .text-white:not(button) {
+  color: #f8fafc;
+}
+
+.theme-light nav .text-slate-100 {
+  color: #f1f5f9;
+}
+
+.theme-light nav .text-slate-200 {
+  color: #e2e8f0;
+}
+
+.theme-light nav .text-slate-300 {
+  color: #cbd5e1;
+}
+
+.theme-light nav .text-slate-400 {
+  color: #94a3b8;
+}
+
+.theme-light nav .text-slate-500 {
+  color: #94a3b8;
+}
+
+.theme-light nav .text-slate-600 {
+  color: #64748b;
+}
+
+.theme-light nav .text-sky-300 {
+  color: #7dd3fc;
+}
+
+.theme-light nav .border-surface-border {
+  border-color: #334155;
+}
+
+.theme-light nav .bg-surface-raised {
+  background-color: #263241;
+}
+
+.theme-light nav .bg-surface {
+  background-color: #1d2735;
+}
+
+.theme-light .bg-slate-800 {
+  background-color: #cbd5e1;
+}
+
+.theme-light .bg-black\/20 {
+  background-color: rgb(241 245 249 / 0.7);
+}
+
+.theme-light .bg-black\/25 {
+  background-color: rgb(241 245 249 / 0.9);
+}
+
+.theme-light input[type='color'] {
+  background-color: #e8ecf1;
+}
+
+.theme-light select option {
+  background: #f2f4f7;
+  color: #1e293b;
 }
 
 #root {

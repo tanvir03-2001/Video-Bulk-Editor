@@ -12,11 +12,14 @@ import { runFfmpegProcess } from './ffmpegProcess';
 
 export interface TextAssetOptions {
   text: string;
+  secondaryText?: string;
   fontFamily: BrandingFontFamily;
   fontWeight: BrandingFontWeight;
   color: string;
   /** Rendered cap height in pixels (already derived from the video height). */
   fontSizePx: number;
+  /** Smaller supporting line, rendered at roughly 38% of the primary size. */
+  secondaryFontSizePx?: number;
   /** Hard cap so long text never exceeds the frame. */
   maxWidthPx: number;
   shadow: boolean;
@@ -145,14 +148,30 @@ async function rasterizeWithSharpText(options: TextAssetOptions): Promise<Raster
 async function rasterizeWithSharpSvg(options: TextAssetOptions): Promise<RasterizedText> {
   const sharp = await loadSharp();
   const fontSize = emSizeFor(options.fontSizePx);
+  const secondaryText = options.secondaryText?.trim() ?? '';
+  const secondaryFontSize = emSizeFor(options.secondaryFontSizePx ?? options.fontSizePx * 0.38);
   // Generous canvas; transparent padding is trimmed afterwards.
-  const estimatedWidth = Math.ceil(fontSize * 0.75 * options.text.length + fontSize * 2);
-  const canvasHeight = Math.ceil(fontSize * 2);
+  const primaryWidth = fontSize * 0.75 * options.text.length;
+  const secondaryWidth = secondaryFontSize * 0.75 * secondaryText.length;
+  const padding = Math.ceil(fontSize * 0.8);
+  const estimatedWidth = Math.ceil(Math.max(primaryWidth, secondaryWidth) + padding * 2);
+  const canvasHeight = Math.ceil(
+    padding + fontSize * 1.15 + (secondaryText ? secondaryFontSize * 1.45 : fontSize * 0.85) + padding,
+  );
+  const right = estimatedWidth - padding;
+  const primaryBaseline = Math.ceil(padding + fontSize);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${estimatedWidth}" height="${canvasHeight}">
-  <text x="${fontSize}" y="${Math.round(canvasHeight * 0.68)}" font-family="${resolveFontFamily(
+  <text x="${right}" y="${primaryBaseline}" text-anchor="end" font-family="${resolveFontFamily(
     options.fontFamily,
   )}" font-size="${fontSize}" font-weight="${BRANDING_FONT_WEIGHT_VALUES[options.fontWeight]}" fill="${options.color}">${escapeMarkup(options.text)}</text>
+  ${
+    secondaryText
+      ? `<text x="${right}" y="${Math.ceil(primaryBaseline + secondaryFontSize * 1.35)}" text-anchor="end" font-family="${resolveFontFamily(
+          options.fontFamily,
+        )}" font-size="${secondaryFontSize}" font-weight="${BRANDING_FONT_WEIGHT_VALUES[options.fontWeight]}" fill="${options.color}">${escapeMarkup(secondaryText)}</text>`
+      : ''
+  }
 </svg>`;
 
   const { data, info } = await sharp(Buffer.from(svg))
@@ -196,8 +215,15 @@ async function rasterizeWithDrawtext(options: TextAssetOptions): Promise<Rasteri
   }
 
   const fontSize = emSizeFor(options.fontSizePx);
-  const canvasWidth = Math.ceil(fontSize * 0.75 * options.text.length + fontSize * 2);
-  const canvasHeight = Math.ceil(fontSize * 2);
+  const secondaryText = options.secondaryText?.trim() ?? '';
+  const secondaryFontSize = emSizeFor(options.secondaryFontSizePx ?? options.fontSizePx * 0.38);
+  const canvasWidth = Math.ceil(
+    Math.max(fontSize * 0.75 * options.text.length, secondaryFontSize * 0.75 * secondaryText.length) +
+      fontSize * 2,
+  );
+  const canvasHeight = Math.ceil(
+    fontSize * 1.15 + (secondaryText ? secondaryFontSize * 1.45 : fontSize * 0.85) + fontSize,
+  );
   const dir = await getCacheDir();
   const outputPath = path.join(dir, `drawtext-${hashOptions(options)}.png`);
 
@@ -213,6 +239,21 @@ async function rasterizeWithDrawtext(options: TextAssetOptions): Promise<Rasteri
     drawtextParts.push(`fontfile='${escapeDrawtextValue(fontFile)}'`);
   }
 
+  const filters = [drawtextParts.join(':')];
+  if (secondaryText) {
+    const secondaryParts = [
+      `text='${escapeDrawtextValue(secondaryText)}'`,
+      `fontcolor=${options.color}`,
+      `fontsize=${secondaryFontSize}`,
+      'x=(w-text_w)/2',
+      `y=${Math.ceil(fontSize * 1.05)}`,
+    ];
+    if (fontFile) {
+      secondaryParts.push(`fontfile='${escapeDrawtextValue(fontFile)}'`);
+    }
+    filters.push(secondaryParts.join(':'));
+  }
+
   await runFfmpegProcess(ffmpeg, [
     '-hide_banner',
     '-loglevel',
@@ -222,7 +263,7 @@ async function rasterizeWithDrawtext(options: TextAssetOptions): Promise<Rasteri
     '-i',
     `color=c=black@0.0:s=${canvasWidth}x${canvasHeight},format=rgba`,
     '-vf',
-    drawtextParts.join(':'),
+    filters.join(','),
     '-frames:v',
     '1',
     '-y',
@@ -241,11 +282,17 @@ async function rasterizeWithDrawtext(options: TextAssetOptions): Promise<Rasteri
 }
 
 async function rasterizeText(options: TextAssetOptions): Promise<RasterizedText> {
-  const attempts: Array<{ name: TextRenderer; run: () => Promise<RasterizedText> }> = [
-    { name: 'sharp-text', run: () => rasterizeWithSharpText(options) },
-    { name: 'sharp-svg', run: () => rasterizeWithSharpSvg(options) },
-    { name: 'ffmpeg-drawtext', run: () => rasterizeWithDrawtext(options) },
-  ];
+  const attempts: Array<{ name: TextRenderer; run: () => Promise<RasterizedText> }> =
+    options.secondaryText?.trim()
+      ? [
+          { name: 'sharp-svg', run: () => rasterizeWithSharpSvg(options) },
+          { name: 'ffmpeg-drawtext', run: () => rasterizeWithDrawtext(options) },
+        ]
+      : [
+          { name: 'sharp-text', run: () => rasterizeWithSharpText(options) },
+          { name: 'sharp-svg', run: () => rasterizeWithSharpSvg(options) },
+          { name: 'ffmpeg-drawtext', run: () => rasterizeWithDrawtext(options) },
+        ];
 
   // Keep using the renderer that already worked in this session.
   if (renderedWith) {

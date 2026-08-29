@@ -1,6 +1,7 @@
 import type { ProcessingProgress, VideoFile } from '../../../shared/ipc';
 import { FolderControls } from '../FolderControls';
 import { EmptyState, Panel, SectionHeading, StatCard } from '../ui/ui';
+import { WorkflowProgressCard } from '../ui/WorkflowProgressCard';
 
 interface FramesWorkspaceProps {
   progress: ProcessingProgress;
@@ -103,6 +104,39 @@ export function FramesWorkspace({
           )}
         </Panel>
       </div>
+
+      <WorkflowProgressCard
+        icon="frames"
+        title="Frame extraction progress"
+        description="Adaptive selection, quality checks, and local safety classification"
+        status={progress.status}
+        statusLabel={frameStatusLabel(progress.status)}
+        progressPercent={progress.progressPercent}
+        currentFile={progress.currentFile}
+        currentStep={frameStepLabel(progress.currentStep)}
+        completed={progress.completedVideos}
+        total={progress.totalVideos}
+        failed={progress.failedVideos}
+        active={progress.status === 'processing'}
+        elapsedMs={progress.elapsedMs}
+        message={progress.message}
+      />
     </div>
   );
+}
+
+function frameStatusLabel(status: ProcessingProgress['status']): string {
+  return status === 'no_videos' ? 'No videos' : status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function frameStepLabel(step: ProcessingProgress['currentStep']): string | null {
+  const labels: Record<ProcessingProgress['currentStep'], string | null> = {
+    idle: null,
+    extracting: 'Extracting frame',
+    checking: 'Checking frame',
+    retrying: 'Retrying safe frame',
+    classifying: 'Classifying frame',
+    done: 'Complete',
+  };
+  return labels[step];
 }

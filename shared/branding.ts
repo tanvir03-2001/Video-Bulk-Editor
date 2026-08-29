@@ -64,7 +64,10 @@ export const BRANDING_FONT_WEIGHT_VALUES: Record<BrandingFontWeight, number> = {
 };
 
 export interface TextLogoConfig {
+  /** Large primary word in the broadcast-style lockup. */
   text: string;
+  /** Optional smaller supporting word rendered beneath and aligned right. */
+  secondaryText: string;
   fontFamily: BrandingFontFamily;
   /** Cap height as a percentage of video height, so it scales with resolution. */
   fontSizePercent: number;
@@ -113,7 +116,8 @@ export const BRANDING_LIMITS = {
 } as const;
 
 export const DEFAULT_TEXT_LOGO_CONFIG: TextLogoConfig = {
-  text: 'My Brand',
+  text: 'Smooth',
+  secondaryText: 'Radio',
   fontFamily: 'sans',
   fontSizePercent: 6,
   fontWeight: 'bold',

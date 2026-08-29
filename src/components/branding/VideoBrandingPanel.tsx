@@ -48,7 +48,7 @@ export function VideoBrandingPanel({ branding }: VideoBrandingPanelProps) {
 
       {!branding.configReady ? (
         <p className="text-xs leading-relaxed text-slate-400">
-          Enable Watermark or Moving Text (and pick a logo for Image Logo mode) to generate a
+          Enable Watermark or Moving Text (and pick a logo for Image Logo mode) to start the live
           preview.
         </p>
       ) : null}

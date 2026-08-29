@@ -40,6 +40,13 @@ function sanitizeText(value: unknown, fallback: string): string {
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
+function sanitizeOptionalText(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  return value.trim().slice(0, MAX_TEXT_LENGTH);
+}
+
 function sanitizeHexColor(value: unknown, fallback: string): string {
   if (typeof value !== 'string') {
     return fallback;
@@ -58,6 +65,7 @@ function sanitizeTextLogo(raw: unknown): TextLogoConfig {
 
   return {
     text: sanitizeText(source.text, defaults.text),
+    secondaryText: sanitizeOptionalText(source.secondaryText, defaults.secondaryText),
     fontFamily: sanitizeEnum<BrandingFontFamily>(
       source.fontFamily,
       BRANDING_FONT_FAMILIES,

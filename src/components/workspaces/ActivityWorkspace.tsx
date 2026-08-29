@@ -14,6 +14,7 @@ interface ActivityWorkspaceProps {
   isProcessing: boolean;
   activityLabel: string;
   stepLabel: string | null;
+  estimatedRemaining: string;
   statusLabel: string;
   currentFile: string | null;
   elapsedMs: number;
@@ -32,6 +33,7 @@ export function ActivityWorkspace({
   isProcessing,
   activityLabel,
   stepLabel,
+  estimatedRemaining,
   statusLabel,
   currentFile,
   elapsedMs,
@@ -51,6 +53,7 @@ export function ActivityWorkspace({
           isProcessing={isProcessing}
           activityLabel={activityLabel}
           stepLabel={stepLabel}
+          estimatedRemaining={estimatedRemaining}
         />
         <StatusPanel
           statusLabel={statusLabel}

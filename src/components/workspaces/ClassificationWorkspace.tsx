@@ -1,6 +1,7 @@
 import type { ImageClassificationProgress, ImageFile, VideoFile } from '../../../shared/ipc';
 import { ImageClassificationPanel } from '../ImageClassificationPanel';
 import { EmptyState, Icon, Panel, SectionHeading, StatCard } from '../ui/ui';
+import { WorkflowProgressCard } from '../ui/WorkflowProgressCard';
 
 interface ClassificationWorkspaceProps {
   progress: ImageClassificationProgress;
@@ -81,8 +82,29 @@ export function ClassificationWorkspace({
         <MediaList title="Images in source" icon="image" items={images.map((file) => file.name)} busy={busy} empty="No supported images scanned." />
         <MediaList title="Videos in source" icon="video" items={videos.map((file) => file.name)} busy={busy} empty="No supported videos scanned." />
       </div>
+
+      <WorkflowProgressCard
+        icon="classify"
+        title="Classification progress"
+        description="Local model review and safe / flagged output routing"
+        status={progress.status}
+        statusLabel={classificationStatusLabel(progress.status)}
+        progressPercent={progress.progressPercent}
+        currentFile={progress.currentFile}
+        currentStep={progress.currentStep === 'classifying' ? 'Classifying media' : progress.currentStep === 'extracting' ? 'Extracting sample frames' : null}
+        completed={progress.processedCount}
+        total={progress.currentImageTotal || progress.imageCount || progress.videoCount}
+        failed={progress.classificationFailed}
+        active={progress.status === 'classifying'}
+        elapsedMs={progress.elapsedMs}
+        message={progress.message}
+      />
     </div>
   );
+}
+
+function classificationStatusLabel(status: ImageClassificationProgress['status']): string {
+  return status === 'no_images' ? 'No media' : status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function MediaList({
