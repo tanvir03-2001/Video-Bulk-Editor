@@ -1,4 +1,5 @@
 import type { ImageClassificationProgress } from '../../shared/ipc';
+import { Button, Panel } from './ui/ui';
 
 interface ImageClassificationPanelProps {
   progress: ImageClassificationProgress;
@@ -15,10 +16,8 @@ interface ImageClassificationPanelProps {
   onClassifyVideos: () => void;
   onCancel: () => void;
   onAllowPercentChange: (value: number) => void;
+  showThreshold?: boolean;
 }
-
-const btn =
-  'rounded-md px-3.5 py-2 text-sm font-medium tracking-readable text-white transition disabled:cursor-not-allowed disabled:opacity-40';
 
 export function ImageClassificationPanel({
   progress,
@@ -35,15 +34,17 @@ export function ImageClassificationPanel({
   onClassifyVideos,
   onCancel,
   onAllowPercentChange,
+  showThreshold = true,
 }: ImageClassificationPanelProps) {
   return (
     <div className="space-y-2.5">
-      <div className="rounded-md border border-surface-border bg-surface px-3 py-2.5">
+      {showThreshold ? (
+        <Panel className="bg-surface p-3">
         <div className="flex items-center justify-between gap-2">
-          <label htmlFor="allow-percent" className="text-sm font-medium tracking-readable text-slate-200">
+          <label htmlFor="allow-percent" className="text-xs font-medium text-slate-300">
             Allow %
           </label>
-          <span className="font-mono text-sm tabular-nums text-white">{allowPercent}%</span>
+          <span className="font-mono text-xs tabular-nums text-sky-300">{allowPercent}%</span>
         </div>
         <input
           id="allow-percent"
@@ -58,49 +59,50 @@ export function ImageClassificationPanel({
           }}
           className="mt-2 w-full accent-accent disabled:opacity-40"
         />
-        <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
           Scores above {allowPercent}% → flagged. At or below → safe. Uses rounded whole
           percents. Any sampled frame can flag a video. Includes watermark/logo/character
           checks too.
         </p>
-      </div>
+        </Panel>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          icon="folder"
           onClick={onSelectFolder}
           disabled={!canSelectFolder}
-          className={`${btn} bg-accent hover:bg-accent-muted`}
         >
           Select Folder
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="success"
+          icon="image"
           onClick={onClassifyImages}
           disabled={!canClassifyImages}
-          className={`${btn} bg-emerald-600 hover:bg-emerald-500`}
         >
           Classify Image
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="success"
+          icon="video"
           onClick={onClassifyVideos}
           disabled={!canClassifyVideos}
-          className={`${btn} bg-teal-600 hover:bg-teal-500`}
         >
           Classify Video
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="danger"
+          icon="stop"
           onClick={onCancel}
           disabled={!canCancel}
-          className={`${btn} bg-rose-700 hover:bg-rose-600`}
         >
           Cancel
-        </button>
+        </Button>
       </div>
 
-      <div className="rounded-md border border-surface-border bg-surface px-3 py-2.5">
+      <Panel className="bg-surface p-3">
         <p
           className="truncate font-mono text-sm leading-relaxed text-slate-100"
           title={progress.selectedFolder ?? undefined}
@@ -115,9 +117,9 @@ export function ImageClassificationPanel({
           </p>
         ) : null}
         {progress.message ? (
-          <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-300">{progress.message}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">{progress.message}</p>
         ) : null}
-      </div>
+      </Panel>
     </div>
   );
 }

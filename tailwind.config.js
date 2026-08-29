@@ -8,11 +8,15 @@ module.exports = {
           DEFAULT: '#12141a',
           raised: '#1a1d27',
           border: '#2a2f3d',
+          hover: '#202532',
         },
         accent: {
           DEFAULT: '#3b82f6',
           muted: '#2563eb',
         },
+        success: '#34d399',
+        warning: '#fbbf24',
+        danger: '#fb7185',
       },
       fontFamily: {
         sans: ['"IBM Plex Sans"', 'Segoe UI', 'system-ui', 'sans-serif'],

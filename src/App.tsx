@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
-import { FolderControls } from './components/FolderControls';
-import { ImageClassificationPanel } from './components/ImageClassificationPanel';
-import { LogPanel } from './components/LogPanel';
-import { ProgressPanel } from './components/ProgressPanel';
-import { StatsGrid } from './components/StatsGrid';
-import { StatusPanel } from './components/StatusPanel';
-import { VideoBrandingPanel } from './components/branding/VideoBrandingPanel';
+import { AppShell } from './components/shell/AppShell';
+import { InspectorPanel } from './components/shell/InspectorPanel';
+import { Sidebar, type AppView } from './components/shell/Sidebar';
+import { StatusBar } from './components/shell/StatusBar';
+import { TopToolbar } from './components/shell/TopToolbar';
 import { useImageClassification } from './hooks/useImageClassification';
 import { useProcessing } from './hooks/useProcessing';
 import { useVideoBranding } from './hooks/useVideoBranding';
+import { ActivityWorkspace } from './components/workspaces/ActivityWorkspace';
+import { BrandingWorkspace } from './components/workspaces/BrandingWorkspace';
+import { ClassificationWorkspace } from './components/workspaces/ClassificationWorkspace';
+import { FramesWorkspace } from './components/workspaces/FramesWorkspace';
+import { OverviewWorkspace } from './components/workspaces/OverviewWorkspace';
 import type { ProcessingStatus } from './types/processing';
-import { APP_DISPLAY_NAME } from '../shared/appMeta';
 
 type JobFocus = 'video' | 'classify' | 'branding';
 
@@ -131,39 +133,41 @@ export default function App() {
 
   const imageClassification = useImageClassification(isProcessing);
   const classifyActive = imageClassification.isClassifying;
-  const videoActive = isProcessing;
-  const branding = useVideoBranding(videoActive || classifyActive);
+  const branding = useVideoBranding(isProcessing || classifyActive);
   const brandingActive = branding.isBranding;
-  const jobActive = videoActive || classifyActive || brandingActive;
-
+  const jobActive = isProcessing || classifyActive || brandingActive;
+  const [activeView, setActiveView] = useState<AppView>('overview');
   const [jobFocus, setJobFocus] = useState<JobFocus>('video');
 
   useEffect(() => {
-    if (videoActive) {
+    if (isProcessing) {
       setJobFocus('video');
+      setActiveView('activity');
     }
-  }, [videoActive]);
+  }, [isProcessing]);
 
   useEffect(() => {
     if (classifyActive) {
       setJobFocus('classify');
+      setActiveView('activity');
     }
   }, [classifyActive]);
 
   useEffect(() => {
     if (brandingActive) {
       setJobFocus('branding');
+      setActiveView('activity');
     }
   }, [brandingActive]);
 
   const showBranding =
-    brandingActive || (!videoActive && !classifyActive && jobFocus === 'branding');
-  const showClassify = !showBranding && (classifyActive || (!videoActive && jobFocus === 'classify'));
+    brandingActive || (!isProcessing && !classifyActive && jobFocus === 'branding');
+  const showClassify =
+    !showBranding && (classifyActive || (!isProcessing && jobFocus === 'classify'));
   const brandingProgress = branding.progress;
   const classifyProgress = imageClassification.progress;
   const classifyingVideos = showClassify && classifyProgress.videoCount > 0;
   const activeStep = showClassify ? classifyProgress.currentStep : progress.currentStep;
-
   const displayPercent = showBranding
     ? brandingProgress.progressPercent
     : showClassify
@@ -199,13 +203,11 @@ export default function App() {
     : showClassify
       ? classifyProgress.logs
       : progress.logs;
-
   const displayStatusLabel = showBranding
     ? brandingStatusLabel(brandingProgress.status)
     : showClassify
       ? classifyStatusLabel(classifyProgress.status, classifyProgress.videoCount)
       : videoStatusLabel(progress.status, activeStep);
-
   const statsCards = showBranding
     ? [
         { label: 'Videos', value: brandingProgress.totalVideos },
@@ -232,20 +234,14 @@ export default function App() {
           { label: 'Failed', value: progress.failedVideos },
           { label: 'Images', value: progress.imagesGenerated },
         ];
-
-  const activityLabel = classifyingVideos
-    ? 'Video'
-    : activeStep === 'classifying'
-      ? 'Image'
-      : 'Video';
-
+  const activityLabel =
+    classifyingVideos ? 'Video' : activeStep === 'classifying' ? 'Image' : 'Video';
   const completedVisible =
     progress.status === 'completed' ||
     progress.status === 'cancelled' ||
     classifyProgress.status === 'completed' ||
     classifyProgress.status === 'cancelled' ||
     classifyProgress.status === 'error';
-
   const showTiming =
     jobActive ||
     completedVisible ||
@@ -254,125 +250,83 @@ export default function App() {
   const canStartVideo = canStart && !classifyActive && !brandingActive;
   const canSelectVideoFolder =
     !busy && !canCancel && !classifyActive && !isProcessing && !brandingActive;
-  const canCancelActive = videoActive || classifyActive;
+  const canCancelActive = isProcessing || classifyActive;
 
-  return (
-    <div className="flex h-full min-h-full flex-col bg-surface font-sans text-slate-100 antialiased">
-      <div className="mx-auto flex h-full w-full max-w-6xl flex-1 flex-col gap-3.5 px-5 py-4">
-        <header className="flex shrink-0 items-baseline justify-between gap-3 border-b border-surface-border pb-3">
-          <h1 className="text-xl font-semibold tracking-readable text-white">
-            {APP_DISPLAY_NAME}
-          </h1>
-          <p className="hidden text-sm leading-relaxed text-slate-400 sm:block">
-            Frames · Classify image/video · Progress stays until next job
-          </p>
-        </header>
+  const toolbarAction =
+    activeView === 'frames'
+      ? {
+          label: 'Select Folder',
+          icon: 'folder' as const,
+          onClick: () => void selectFolder(),
+          disabled: !canSelectVideoFolder,
+        }
+      : activeView === 'classify'
+        ? {
+            label: 'Select Folder',
+            icon: 'folder' as const,
+            onClick: () => void imageClassification.selectImageFolder(),
+            disabled: !imageClassification.canSelectFolder || brandingActive,
+          }
+        : activeView === 'branding'
+          ? {
+              label: 'Select Folder',
+              icon: 'folder' as const,
+              onClick: () => void branding.selectFolder(),
+              disabled: !branding.canSelectFolder,
+            }
+          : undefined;
 
-        {!progress.ffmpegAvailable ? (
-          <div className="shrink-0 rounded-md border border-rose-700/50 bg-rose-950/30 px-3 py-2 text-sm leading-relaxed text-rose-100">
-            {progress.ffmpegError ?? 'FFmpeg is required for video processing.'}
-          </div>
-        ) : null}
-
-        <div className="grid shrink-0 gap-3 md:grid-cols-2">
-          <section className="rounded-md border border-surface-border bg-surface-raised/70 p-3.5">
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold tracking-readable text-slate-100">
-                1. Video → Frames
-              </h2>
-              <span className="text-xs text-slate-400">Generated Images + inline safe/flagged</span>
-            </div>
-            <FolderControls
-              selectedFolder={
-                showClassify && classifyActive
-                  ? classifyProgress.selectedFolder
-                  : progress.selectedFolder
-              }
-              message={showClassify && classifyActive ? null : progress.message}
-              videoCount={videos.length}
-              allowPercent={allowPercent}
-              canStart={canStartVideo}
-              canCancel={canCancelActive}
-              canSelectFolder={canSelectVideoFolder}
-              onAllowPercentChange={setAllowPercent}
-              onSelectFolder={() => {
-                if (!canSelectVideoFolder) {
-                  return;
-                }
-                void selectFolder();
-              }}
-              onStart={() => {
-                void startProcessing();
-              }}
-              onCancel={() => {
-                if (classifyActive) {
-                  void imageClassification.cancelClassification();
-                  return;
-                }
-                void cancelProcessing();
-              }}
-            />
-          </section>
-
-          <section className="rounded-md border border-surface-border bg-surface-raised/70 p-3.5">
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold tracking-readable text-slate-100">
-                2. Classify Split
-              </h2>
-              <span className="text-xs text-slate-400">safe / flagged folders</span>
-            </div>
-            <ImageClassificationPanel
-              progress={imageClassification.progress}
-              imageCount={imageClassification.images.length}
-              videoCount={imageClassification.videos.length}
-              busy={imageClassification.busy}
-              allowPercent={imageClassification.allowPercent}
-              canSelectFolder={imageClassification.canSelectFolder && !brandingActive}
-              canClassifyImages={imageClassification.canClassifyImages && !brandingActive}
-              canClassifyVideos={imageClassification.canClassifyVideos && !brandingActive}
-              canCancel={imageClassification.canCancel}
-              onSelectFolder={() => {
-                void imageClassification.selectImageFolder();
-              }}
-              onClassifyImages={() => {
-                void imageClassification.startClassifyImages();
-              }}
-              onClassifyVideos={() => {
-                void imageClassification.startClassifyVideos();
-              }}
-              onCancel={() => {
+  const renderWorkspace = () => {
+    switch (activeView) {
+      case 'frames':
+        return (
+          <FramesWorkspace
+            progress={progress}
+            videos={videos}
+            busy={busy}
+            allowPercent={allowPercent}
+            canStart={canStartVideo}
+            canCancel={canCancelActive}
+            canSelectFolder={canSelectVideoFolder}
+            onAllowPercentChange={setAllowPercent}
+            onSelectFolder={() => void selectFolder()}
+            onStart={() => void startProcessing()}
+            onCancel={() => {
+              if (classifyActive) {
                 void imageClassification.cancelClassification();
-              }}
-              onAllowPercentChange={imageClassification.setAllowPercent}
-            />
-          </section>
-        </div>
-
-        <section className="shrink-0 rounded-md border border-surface-border bg-surface-raised/70 p-3.5">
-          <div className="mb-2.5 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold tracking-readable text-slate-100">
-              3. Video Branding
-            </h2>
-            <span className="text-xs text-slate-400">watermark + moving text · originals kept</span>
-          </div>
-          <VideoBrandingPanel branding={branding} />
-        </section>
-
-        <section className="flex min-h-0 flex-1 flex-col gap-3 rounded-md border border-surface-border bg-surface-raised/50 p-3.5">
-          <div className="flex shrink-0 items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-readable text-slate-100">Live Progress</h2>
-            <span className="text-xs text-slate-400">
-              {showBranding
-                ? 'Branding job'
-                : showClassify
-                  ? 'Classification job'
-                  : 'Adaptive frame selection'}
-            </span>
-          </div>
-
-          <StatsGrid cards={statsCards} />
-
-          <ProgressPanel
+              } else {
+                void cancelProcessing();
+              }
+            }}
+          />
+        );
+      case 'classify':
+        return (
+          <ClassificationWorkspace
+            progress={classifyProgress}
+            images={imageClassification.images}
+            videos={imageClassification.videos}
+            busy={imageClassification.busy}
+            allowPercent={imageClassification.allowPercent}
+            canSelectFolder={imageClassification.canSelectFolder && !brandingActive}
+            canClassifyImages={imageClassification.canClassifyImages && !brandingActive}
+            canClassifyVideos={imageClassification.canClassifyVideos && !brandingActive}
+            canCancel={imageClassification.canCancel}
+            onSelectFolder={() => void imageClassification.selectImageFolder()}
+            onClassifyImages={() => void imageClassification.startClassifyImages()}
+            onClassifyVideos={() => void imageClassification.startClassifyVideos()}
+            onCancel={() => void imageClassification.cancelClassification()}
+            onAllowPercentChange={imageClassification.setAllowPercent}
+          />
+        );
+      case 'branding':
+        return <BrandingWorkspace branding={branding} />;
+      case 'activity':
+        return (
+          <ActivityWorkspace
+            title={showBranding ? 'Branding activity' : showClassify ? 'Classification activity' : 'Processing activity'}
+            subtitle="Follow the active job, inspect the current file, and review its event log."
+            statsCards={statsCards}
             progressPercent={displayPercent}
             currentImageIndex={displayImageIndex}
             currentImageTotal={displayImageTotal}
@@ -387,24 +341,105 @@ export default function App() {
                   : null
                 : stepBanner(activeStep, jobActive, classifyingVideos)
             }
-          />
-
-          <StatusPanel
             statusLabel={displayStatusLabel}
             currentFile={displayCurrentFile}
             elapsedMs={displayElapsed}
             message={displayMessage}
             showTiming={showTiming}
-            isActive={jobActive}
-          />
-
-          <LogPanel
             logs={displayLogs}
-            title={showBranding ? 'Branding log' : showClassify ? 'Classification log' : 'Processing log'}
-            compact
           />
-        </section>
-      </div>
-    </div>
+        );
+      default:
+        return (
+          <OverviewWorkspace
+            processing={progress}
+            classification={classifyProgress}
+            branding={brandingProgress}
+            videos={videos}
+            imageCount={imageClassification.images.length}
+            classificationVideoCount={imageClassification.videos.length}
+            onNavigate={setActiveView}
+          />
+        );
+    }
+  };
+
+  return (
+    <AppShell
+      sidebar={
+        <Sidebar
+          activeView={activeView}
+          onNavigate={setActiveView}
+          jobActive={jobActive}
+          activeJobLabel={displayStatusLabel}
+          frameCount={videos.length}
+          mediaCount={imageClassification.images.length + imageClassification.videos.length}
+        />
+      }
+      toolbar={
+        <TopToolbar
+          view={activeView}
+          jobActive={jobActive}
+          statusLabel={displayStatusLabel}
+          primaryAction={toolbarAction}
+          secondaryAction={toolbarAction}
+          onActivity={() => setActiveView('activity')}
+        />
+      }
+      inspector={
+        <InspectorPanel
+          view={activeView}
+          processing={progress}
+          classification={classifyProgress}
+          branding={brandingProgress}
+          brandingConfig={branding.config}
+          videoAllowPercent={allowPercent}
+          classifyAllowPercent={imageClassification.allowPercent}
+          onVideoAllowPercentChange={setAllowPercent}
+          onClassifyAllowPercentChange={imageClassification.setAllowPercent}
+        />
+      }
+      statusBar={
+        <StatusBar
+          jobActive={jobActive}
+          statusLabel={displayStatusLabel}
+          message={displayMessage}
+          currentFile={displayCurrentFile}
+          progressPercent={displayPercent}
+          completed={
+            showBranding
+              ? brandingProgress.completedVideos
+              : showClassify
+                ? classifyProgress.processedCount
+                : progress.completedVideos
+          }
+          total={
+            showBranding
+              ? brandingProgress.totalVideos
+              : showClassify
+                ? classifyProgress.currentImageTotal || classifyProgress.imageCount || classifyProgress.videoCount
+                : progress.totalVideos
+          }
+          failed={
+            showBranding
+              ? brandingProgress.failedVideos
+              : showClassify
+                ? classifyProgress.classificationFailed
+                : progress.failedVideos
+          }
+          elapsed={formatElapsed(displayElapsed)}
+        />
+      }
+    >
+      {renderWorkspace()}
+    </AppShell>
   );
+}
+
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((n) => String(n).padStart(2, '0')).join(':');
 }

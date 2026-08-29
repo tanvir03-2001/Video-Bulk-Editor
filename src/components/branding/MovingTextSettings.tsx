@@ -4,6 +4,7 @@ import {
   type MovingTextConfig,
   type MovingTextSpeed,
 } from '../../../shared/branding';
+import { Panel } from '../ui/ui';
 
 interface MovingTextSettingsProps {
   config: MovingTextConfig;
@@ -11,7 +12,7 @@ interface MovingTextSettingsProps {
   onChange: (patch: Partial<MovingTextConfig>) => void;
 }
 
-const fieldLabel = 'text-xs font-medium tracking-readable text-slate-300';
+const fieldLabel = 'text-xs font-medium text-slate-300';
 const inputBase =
   'w-full rounded-md border border-surface-border bg-surface px-2.5 py-1.5 text-sm text-slate-100 outline-none transition focus:border-accent disabled:opacity-40';
 
@@ -25,8 +26,8 @@ export function MovingTextSettings({ config, disabled, onChange }: MovingTextSet
   const controlsDisabled = disabled || !config.enabled;
 
   return (
-    <div className="space-y-2.5 rounded-md border border-surface-border bg-surface px-3 py-2.5">
-      <label className="flex items-center gap-2 text-sm font-medium tracking-readable text-slate-100">
+    <Panel className="space-y-3 bg-surface p-3.5">
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-100">
         <input
           type="checkbox"
           checked={config.enabled}
@@ -122,6 +123,6 @@ export function MovingTextSettings({ config, disabled, onChange }: MovingTextSet
         Drifts smoothly across the frame on a slow, looping path — no jumps, always fully inside
         the video.
       </p>
-    </div>
+    </Panel>
   );
 }

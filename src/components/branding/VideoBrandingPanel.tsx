@@ -2,44 +2,48 @@ import type { VideoBrandingController } from '../../hooks/useVideoBranding';
 import { BrandingPreview } from './BrandingPreview';
 import { MovingTextSettings } from './MovingTextSettings';
 import { WatermarkSettings } from './WatermarkSettings';
+import { Badge, Button, Panel } from '../ui/ui';
 
 interface VideoBrandingPanelProps {
   branding: VideoBrandingController;
 }
 
 export function VideoBrandingPanel({ branding }: VideoBrandingPanelProps) {
-  const settingsDisabled = branding.isBranding || branding.busy;
+  const settingsDisabled =
+    branding.isBranding ||
+    branding.busy ||
+    (!branding.canSelectFolder && !branding.canPreview && !branding.canApply);
 
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          icon="folder"
           onClick={() => {
             void branding.selectFolder();
           }}
           disabled={!branding.canSelectFolder}
-          className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium tracking-readable text-white transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Select Video Folder
-        </button>
+          Select Folder
+        </Button>
         <p
-          className="min-w-0 flex-1 truncate font-mono text-sm text-slate-300"
+          className="min-w-0 flex-1 truncate rounded-md border border-surface-border bg-surface px-3 py-2 font-mono text-xs text-slate-400"
           title={branding.folder ?? undefined}
         >
           {branding.folder ?? 'No folder selected'}
         </p>
         {branding.videos.length > 0 ? (
-          <span className="text-sm text-emerald-300">
+          <Badge tone="success">
             {branding.videos.length} video{branding.videos.length === 1 ? '' : 's'}
-          </span>
+          </Badge>
         ) : null}
       </div>
 
       {branding.error ? (
-        <p className="rounded-md border border-rose-700/50 bg-rose-950/30 px-3 py-2 text-sm leading-relaxed text-rose-100">
+        <Panel className="border-rose-500/30 bg-rose-950/20 px-3 py-2 text-sm leading-relaxed text-rose-100" role="alert">
           {branding.error}
-        </p>
+        </Panel>
       ) : null}
 
       {!branding.configReady ? (
@@ -49,7 +53,7 @@ export function VideoBrandingPanel({ branding }: VideoBrandingPanelProps) {
         </p>
       ) : null}
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 xl:grid-cols-3">
         <WatermarkSettings
           config={branding.config.watermark}
           disabled={settingsDisabled}

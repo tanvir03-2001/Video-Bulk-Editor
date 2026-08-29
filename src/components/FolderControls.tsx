@@ -1,3 +1,5 @@
+import { Button, Panel } from './ui/ui';
+
 interface FolderControlsProps {
   selectedFolder: string | null;
   message: string | null;
@@ -10,10 +12,8 @@ interface FolderControlsProps {
   onStart: () => void;
   onCancel: () => void;
   onAllowPercentChange: (value: number) => void;
+  showThreshold?: boolean;
 }
-
-const btn =
-  'rounded-md px-3.5 py-2 text-sm font-medium tracking-readable text-white transition disabled:cursor-not-allowed disabled:opacity-40';
 
 export function FolderControls({
   selectedFolder,
@@ -27,15 +27,17 @@ export function FolderControls({
   onStart,
   onCancel,
   onAllowPercentChange,
+  showThreshold = true,
 }: FolderControlsProps) {
   return (
     <div className="space-y-2.5">
-      <div className="rounded-md border border-surface-border bg-surface px-3 py-2.5">
+      {showThreshold ? (
+        <Panel className="bg-surface p-3">
         <div className="flex items-center justify-between gap-2">
-          <label htmlFor="video-allow-percent" className="text-sm font-medium tracking-readable text-slate-200">
+          <label htmlFor="video-allow-percent" className="text-xs font-medium text-slate-300">
             Allow %
           </label>
-          <span className="font-mono text-sm tabular-nums text-white">{allowPercent}%</span>
+          <span className="font-mono text-xs tabular-nums text-sky-300">{allowPercent}%</span>
         </div>
         <input
           id="video-allow-percent"
@@ -50,40 +52,41 @@ export function FolderControls({
           }}
           className="mt-2 w-full accent-accent disabled:opacity-40"
         />
-        <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
           Scores above {allowPercent}% → flagged. At or below → safe. Per-video frame check with
           up to 5 retries. Uses rounded whole percents.
         </p>
-      </div>
+        </Panel>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          icon="folder"
           onClick={onSelectFolder}
           disabled={!canSelectFolder}
-          className={`${btn} bg-accent hover:bg-accent-muted`}
         >
           Select Folder
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="success"
+          icon="play"
           onClick={onStart}
           disabled={!canStart}
-          className={`${btn} bg-emerald-600 hover:bg-emerald-500`}
         >
           Start
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="danger"
+          icon="stop"
           onClick={onCancel}
           disabled={!canCancel}
-          className={`${btn} bg-rose-700 hover:bg-rose-600`}
         >
           Cancel
-        </button>
+        </Button>
       </div>
 
-      <div className="rounded-md border border-surface-border bg-surface px-3 py-2.5">
+      <Panel className="bg-surface p-3">
         <p
           className="truncate font-mono text-sm leading-relaxed text-slate-100"
           title={selectedFolder ?? undefined}
@@ -96,9 +99,9 @@ export function FolderControls({
           </p>
         ) : null}
         {message ? (
-          <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-300">{message}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">{message}</p>
         ) : null}
-      </div>
+      </Panel>
     </div>
   );
 }

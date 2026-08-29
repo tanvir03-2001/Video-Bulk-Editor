@@ -30,6 +30,7 @@ body {
 #root {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 button,
@@ -40,6 +41,23 @@ textarea {
   -webkit-font-smoothing: antialiased;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+input[type='range'] {
+  accent-color: #3b82f6;
+}
+
+select option {
+  background: #1a1d27;
+  color: #eef1f6;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -47,4 +65,8 @@ textarea {
 ::-webkit-scrollbar-thumb {
   background: #2a2f3d;
   border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }

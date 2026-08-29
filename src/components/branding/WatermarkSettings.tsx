@@ -8,6 +8,7 @@ import {
   type OverlayPosition,
   type WatermarkConfig,
 } from '../../../shared/branding';
+import { Button, Panel } from '../ui/ui';
 
 interface WatermarkSettingsProps {
   config: WatermarkConfig;
@@ -17,7 +18,7 @@ interface WatermarkSettingsProps {
   onSelectLogo: () => void;
 }
 
-const fieldLabel = 'text-xs font-medium tracking-readable text-slate-300';
+const fieldLabel = 'text-xs font-medium text-slate-300';
 const inputBase =
   'w-full rounded-md border border-surface-border bg-surface px-2.5 py-1.5 text-sm text-slate-100 outline-none transition focus:border-accent disabled:opacity-40';
 
@@ -92,8 +93,8 @@ export function WatermarkSettings({
   const controlsDisabled = disabled || !config.enabled;
 
   return (
-    <div className="space-y-2.5 rounded-md border border-surface-border bg-surface px-3 py-2.5">
-      <label className="flex items-center gap-2 text-sm font-medium tracking-readable text-slate-100">
+    <Panel className="space-y-3 bg-surface p-3.5">
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-100">
         <input
           type="checkbox"
           checked={config.enabled}
@@ -106,7 +107,7 @@ export function WatermarkSettings({
         Watermark
       </label>
 
-      <div className="flex gap-3 text-sm text-slate-200">
+      <div className="flex gap-3 border-b border-surface-border pb-2 text-xs text-slate-300">
         {(['image', 'text'] as const).map((mode) => (
           <label key={mode} className="flex items-center gap-1.5">
             <input
@@ -126,14 +127,15 @@ export function WatermarkSettings({
 
       {config.mode === 'image' ? (
         <div className="space-y-1.5">
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="secondary"
+            icon="image"
             onClick={onSelectLogo}
             disabled={controlsDisabled}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium tracking-readable text-white transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-40"
           >
             Choose Logo Image
-          </button>
+          </Button>
           <p
             className="truncate font-mono text-xs leading-relaxed text-slate-400"
             title={config.imagePath ?? undefined}
@@ -290,6 +292,6 @@ export function WatermarkSettings({
           onChange({ marginPercent: value });
         }}
       />
-    </div>
+    </Panel>
   );
 }

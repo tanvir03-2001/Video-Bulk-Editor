@@ -24,18 +24,18 @@ export function StatusPanel({
   isActive,
 }: StatusPanelProps) {
   return (
-    <div className="grid grid-cols-3 gap-2.5 text-sm">
-      <div className="rounded-md border border-surface-border bg-surface-raised px-3 py-2">
-        <p className="text-xs font-medium tracking-readable text-slate-400">Status</p>
-        <p className="mt-1 truncate font-semibold tracking-readable text-white">{statusLabel}</p>
+    <div className="grid gap-2.5 text-sm sm:grid-cols-3" aria-live="polite">
+      <div className="rounded-md border border-surface-border bg-surface px-3 py-2.5">
+        <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-slate-500">Status</p>
+        <p className="mt-1 truncate font-semibold text-white">{statusLabel}</p>
         {message ? (
-          <p className="mt-1 line-clamp-2 leading-relaxed text-slate-300">{message}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">{message}</p>
         ) : null}
       </div>
-      <div className="col-span-2 rounded-md border border-surface-border bg-surface-raised px-3 py-2">
+      <div className="rounded-md border border-surface-border bg-surface px-3 py-2.5 sm:col-span-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium tracking-readable text-slate-400">Current file</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-slate-500">Current file</p>
             <p
               className="mt-1 truncate font-mono text-sm leading-relaxed text-slate-100"
               title={currentFile ?? undefined}
