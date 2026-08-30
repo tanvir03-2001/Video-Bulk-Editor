@@ -129,6 +129,20 @@ Section **3. Video Branding** adds a lightweight branding pass that runs entirel
 - **Moving Text** — a subtle overlay that drifts smoothly across the frame on a slow sine path with different horizontal and vertical periods, so it never jumps and always stays fully inside the frame. Speed presets: Very Slow (default), Slow, Normal.
 - **Canvas & Side Images** — choose Original or social-friendly output ratios (`1:1`, `4:5`, `9:16`, `16:9`, `4:3`, `3:4`, `2:3`, `3:2`, `21:9`) or enter a custom ratio. Enable any combination of Top, Bottom, Left, and Right image bands; top/bottom images fit the canvas width and left/right images fit the video height while preserving their aspect ratio.
 - **Video Zoom** — use 50%–200% zoom before the video is placed into the selected canvas. Zoom above 100% crops in; zoom below 100% scales the video down inside the center area.
+
+## Image Editing (Bulk Image Editor)
+
+Section **4. Image Editing** applies one consistent setup to every supported image in a selected folder. Originals remain untouched and edited files are written to a separate `Edited Images` folder by default.
+
+- **Canvas & Crop** — choose the original or a social-friendly ratio, use a custom ratio, select crop-to-fill or fit-inside behavior, and adjust image zoom.
+- **Side Images** — add top, bottom, left, or right image bands. Bands preserve their aspect ratio and automatically fit so the main image remains visible.
+- **Watermark Logo** — place an image logo above the main photo and side bands with configurable position, scale, and opacity. Moving text is not used in this workflow.
+- **Filters & Tuning** — choose fixed looks such as Vivid, Warm, Cool, Monochrome, Sepia, Cinematic, and High Contrast, then refine brightness, contrast, saturation, temperature, hue, and sharpening.
+- **Live Preview & Batch Output** — preview any scanned image in the right inspector as settings change, then apply the same setup to the complete image folder with progress, ETA, cancellation, and an `image-edit-report.json` report.
+
+### Bundled Lightroom Presets
+
+The project includes the XMP preset library from [peva3/Lightroom-Presets](https://github.com/peva3/Lightroom-Presets) under `presets/lightroom/Presets`. The source repository is MIT licensed; its license is included at `presets/lightroom/LICENSE`. Presets are grouped by category in the Image Editing workspace, show thumbnails using the bundled fixed preview image, and are mapped to the app's local Sharp-based tuning controls for preview and batch rendering. Users can import another folder of XMP files, and favorites are persisted locally in the app.
 - **Preview** — pick any scanned video and enable an overlay. A real 5-second clip is rendered automatically after settings settle, using the exact same filter graph and encoder settings as the final output, then played back in the app. Adjust settings to refresh the live preview; a retry action is available if a render fails.
 - **Apply to All Videos** — processes the folder sequentially. Each video fails independently, so a corrupted file is logged and skipped without stopping the batch.
 

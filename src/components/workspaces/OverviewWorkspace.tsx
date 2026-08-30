@@ -1,5 +1,6 @@
 import type { BrandingProgress } from '../../../shared/branding';
 import type { ImageClassificationProgress, ProcessingProgress, VideoFile } from '../../../shared/ipc';
+import type { ImageEditProgress } from '../../../shared/imageEditing';
 import { Badge, Button, Icon, Panel, SectionHeading, StatCard } from '../ui/ui';
 import type { AppView } from '../shell/Sidebar';
 
@@ -7,6 +8,7 @@ interface OverviewWorkspaceProps {
   processing: ProcessingProgress;
   classification: ImageClassificationProgress;
   branding: BrandingProgress;
+  imageEditing: ImageEditProgress;
   videos: VideoFile[];
   imageCount: number;
   classificationVideoCount: number;
@@ -17,6 +19,7 @@ export function OverviewWorkspace({
   processing,
   classification,
   branding,
+  imageEditing,
   videos,
   imageCount,
   classificationVideoCount,
@@ -29,6 +32,8 @@ export function OverviewWorkspace({
         ? 'Media classification'
         : branding.status === 'processing' || branding.status === 'previewing'
           ? 'Video branding'
+          : imageEditing.status === 'processing' || imageEditing.status === 'previewing'
+            ? 'Image editing'
           : null;
 
   return (
@@ -94,6 +99,14 @@ export function OverviewWorkspace({
           count={branding.totalVideos ? `${branding.totalVideos} videos ready` : 'No folder selected'}
           onClick={() => onNavigate('branding')}
         />
+        <WorkflowCard
+          icon="image"
+          eyebrow="Edit"
+          title="Image Editing"
+          description="Apply presets, grading, crop, side images, and a watermark to a complete image folder."
+          count={imageCount ? `${imageCount} images ready` : 'No folder selected'}
+          onClick={() => onNavigate('image-editor')}
+        />
       </div>
 
       <Panel className="p-4">
@@ -110,6 +123,7 @@ export function OverviewWorkspace({
           <ActivityRow label="Frame extraction" status={processing.status} />
           <ActivityRow label="Classification" status={classification.status} />
           <ActivityRow label="Branding" status={branding.status} />
+          <ActivityRow label="Image editing" status={imageEditing.status} />
         </div>
       </Panel>
     </div>
@@ -124,7 +138,7 @@ function WorkflowCard({
   count,
   onClick,
 }: {
-  icon: 'frames' | 'classify' | 'logo';
+  icon: 'frames' | 'classify' | 'logo' | 'image';
   eyebrow: string;
   title: string;
   description: string;

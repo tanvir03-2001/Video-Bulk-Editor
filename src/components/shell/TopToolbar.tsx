@@ -18,6 +18,7 @@ const viewTitles: Record<AppView, string> = {
   frames: 'Video → Frames',
   classify: 'Classify Split',
   branding: 'Video Branding',
+  'image-editor': 'Image Editing',
   activity: 'Activity & Progress',
 };
 

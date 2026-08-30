@@ -3,6 +3,12 @@ import type {
   BrandingEvent,
   BrandingPreviewRequest,
 } from './branding';
+import type {
+  ImageEditBatchRequest,
+  ImageEditEvent,
+  ImageEditPreviewRequest,
+  ImageEditPresetSummary,
+} from './imageEditing';
 
 export interface VideoFile {
   name: string;
@@ -158,6 +164,17 @@ export const IpcChannels = {
   CANCEL_BRANDING: 'cancel-branding',
   READ_BRANDING_PREVIEW_FILE: 'read-branding-preview-file',
   BRANDING_EVENT: 'branding-event',
+  SELECT_IMAGE_EDIT_OUTPUT_FOLDER: 'select-image-edit-output-folder',
+  RESOLVE_IMAGE_EDIT_OUTPUT_FOLDER: 'resolve-image-edit-output-folder',
+  START_IMAGE_EDIT_PREVIEW: 'start-image-edit-preview',
+  START_IMAGE_EDIT_BATCH: 'start-image-edit-batch',
+  CANCEL_IMAGE_EDIT: 'cancel-image-edit',
+  READ_IMAGE_EDIT_PREVIEW_FILE: 'read-image-edit-preview-file',
+  IMAGE_EDIT_EVENT: 'image-edit-event',
+  LIST_IMAGE_EDIT_PRESETS: 'list-image-edit-presets',
+  SELECT_IMAGE_EDIT_PRESET_FOLDER: 'select-image-edit-preset-folder',
+  IMPORT_IMAGE_EDIT_PRESETS: 'import-image-edit-presets',
+  PREVIEW_IMAGE_EDIT_PRESET: 'preview-image-edit-preset',
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];
@@ -247,6 +264,17 @@ export interface ElectronApi {
   cancelBranding: () => Promise<void>;
   readBrandingPreviewFile: (previewPath: string) => Promise<Uint8Array>;
   onBranding: (callback: (event: BrandingEvent) => void) => () => void;
+  selectImageEditOutputFolder: () => Promise<string | null>;
+  resolveImageEditOutputFolder: (folderPath: string) => Promise<string>;
+  startImageEditPreview: (request: ImageEditPreviewRequest) => Promise<void>;
+  startImageEditBatch: (request: ImageEditBatchRequest) => Promise<void>;
+  cancelImageEdit: () => Promise<void>;
+  readImageEditPreviewFile: (previewPath: string) => Promise<string>;
+  onImageEdit: (callback: (event: ImageEditEvent) => void) => () => void;
+  listImageEditPresets: () => Promise<ImageEditPresetSummary[]>;
+  selectImageEditPresetFolder: () => Promise<string | null>;
+  importImageEditPresets: (folderPath: string) => Promise<ImageEditPresetSummary[]>;
+  previewImageEditPreset: (presetId: string) => Promise<string>;
 }
 declare global {
   interface Window {

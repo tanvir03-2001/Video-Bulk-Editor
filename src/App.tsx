@@ -6,6 +6,7 @@ import { Sidebar, type AppView } from './components/shell/Sidebar';
 import { StatusBar } from './components/shell/StatusBar';
 import { TopToolbar } from './components/shell/TopToolbar';
 import { useImageClassification } from './hooks/useImageClassification';
+import { useImageEditing } from './hooks/useImageEditing';
 import { useProcessing } from './hooks/useProcessing';
 import { useVideoBranding } from './hooks/useVideoBranding';
 import { ActivityWorkspace } from './components/workspaces/ActivityWorkspace';
@@ -13,10 +14,12 @@ import { BrandingWorkspace } from './components/workspaces/BrandingWorkspace';
 import { ClassificationWorkspace } from './components/workspaces/ClassificationWorkspace';
 import { FramesWorkspace } from './components/workspaces/FramesWorkspace';
 import { OverviewWorkspace } from './components/workspaces/OverviewWorkspace';
+import { ImageEditPreview } from './components/imageEditing/ImageEditPreview';
+import { ImageEditingWorkspace } from './components/workspaces/ImageEditingWorkspace';
 import type { ProcessingStatus } from './types/processing';
 import { formatEstimatedRemaining } from './utils/progress';
 
-type JobFocus = 'video' | 'classify' | 'branding';
+type JobFocus = 'video' | 'classify' | 'branding' | 'image-editor';
 
 function videoStatusLabel(status: ProcessingStatus, step: string): string {
   if (status === 'processing') {
@@ -99,6 +102,13 @@ function brandingStatusLabel(status: string): string {
   }
 }
 
+function imageEditStatusLabel(status: string): string {
+  if (status === 'no_images') {
+    return 'No Images';
+  }
+  return status.replace('_', ' ').replace(/^\w/, (value) => value.toUpperCase());
+}
+
 function stepBanner(step: string, isActive: boolean, classifyingVideos: boolean): string | null {
   if (!isActive) {
     return null;
@@ -137,7 +147,9 @@ export default function App() {
   const classifyActive = imageClassification.isClassifying;
   const branding = useVideoBranding(isProcessing || classifyActive);
   const brandingActive = branding.isBranding;
-  const jobActive = isProcessing || classifyActive || brandingActive;
+  const imageEditing = useImageEditing(isProcessing || classifyActive || brandingActive);
+  const imageEditingActive = imageEditing.isEditing;
+  const jobActive = isProcessing || classifyActive || brandingActive || imageEditingActive;
   const [activeView, setActiveView] = useState<AppView>('overview');
   const [jobFocus, setJobFocus] = useState<JobFocus>('video');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -175,54 +187,85 @@ export default function App() {
     }
   }, [brandingActive]);
 
+  useEffect(() => {
+    if (imageEditingActive) {
+      setJobFocus('image-editor');
+    }
+  }, [imageEditingActive]);
+
   const showBranding =
     brandingActive || (!isProcessing && !classifyActive && jobFocus === 'branding');
   const showClassify =
     !showBranding && (classifyActive || (!isProcessing && jobFocus === 'classify'));
+  const showImageEditing =
+    !showBranding &&
+    !showClassify &&
+    (imageEditingActive ||
+      (!isProcessing &&
+        !classifyActive &&
+        !brandingActive &&
+        jobFocus === 'image-editor'));
   const brandingProgress = branding.progress;
   const classifyProgress = imageClassification.progress;
+  const imageEditProgress = imageEditing.progress;
   const classifyingVideos = showClassify && classifyProgress.videoCount > 0;
   const activeStep = showClassify ? classifyProgress.currentStep : progress.currentStep;
   const displayPercent = showBranding
     ? brandingProgress.progressPercent
     : showClassify
       ? classifyProgress.progressPercent
-      : progress.progressPercent;
+      : showImageEditing
+        ? imageEditProgress.progressPercent
+        : progress.progressPercent;
   const displayImageIndex = showBranding
     ? brandingProgress.currentVideoIndex
     : showClassify
       ? classifyProgress.currentImageIndex
-      : progress.currentImageIndex;
+      : showImageEditing
+        ? imageEditProgress.currentImageIndex
+        : progress.currentImageIndex;
   const displayImageTotal = showBranding
     ? brandingProgress.totalVideos
     : showClassify
       ? classifyProgress.currentImageTotal
-      : progress.currentImageTotal;
+      : showImageEditing
+        ? imageEditProgress.totalImages
+        : progress.currentImageTotal;
   const displayCurrentFile = showBranding
     ? brandingProgress.currentFile
     : showClassify
       ? classifyProgress.currentFile
-      : progress.currentFile;
+      : showImageEditing
+        ? imageEditProgress.currentFile
+        : progress.currentFile;
   const displayElapsed = showBranding
     ? brandingProgress.elapsedMs
     : showClassify
       ? classifyProgress.elapsedMs
-      : progress.elapsedMs;
+      : showImageEditing
+        ? imageEditProgress.elapsedMs
+        : progress.elapsedMs;
   const displayMessage = showBranding
     ? brandingProgress.message
     : showClassify
       ? classifyProgress.message
-      : progress.message;
+      : showImageEditing
+        ? imageEditProgress.message
+        : progress.message;
   const displayLogs = showBranding
     ? brandingProgress.logs
     : showClassify
       ? classifyProgress.logs
-      : progress.logs;
+      : showImageEditing
+        ? imageEditProgress.logs
+        : progress.logs;
   const displayStatusLabel = showBranding
     ? brandingStatusLabel(brandingProgress.status)
     : showClassify
       ? classifyStatusLabel(classifyProgress.status, classifyProgress.videoCount)
-      : videoStatusLabel(progress.status, activeStep);
+      : showImageEditing
+        ? imageEditStatusLabel(imageEditProgress.status)
+        : videoStatusLabel(progress.status, activeStep);
   const statsCards = showBranding
     ? [
         { label: 'Videos', value: brandingProgress.totalVideos },
@@ -242,13 +285,21 @@ export default function App() {
           { label: 'Flagged', value: classifyProgress.flaggedImages },
           { label: 'Failed', value: classifyProgress.classificationFailed },
         ]
-      : [
-          { label: 'Videos', value: progress.totalVideos },
-          { label: 'Done', value: progress.completedVideos },
-          { label: 'Left', value: progress.remainingVideos },
-          { label: 'Failed', value: progress.failedVideos },
-          { label: 'Images', value: progress.imagesGenerated },
-        ];
+      : showImageEditing
+        ? [
+            { label: 'Images', value: imageEditProgress.totalImages },
+            { label: 'Done', value: imageEditProgress.completedImages },
+            { label: 'Failed', value: imageEditProgress.failedImages },
+            { label: 'Edit %', value: Math.round(imageEditProgress.progressPercent) },
+            { label: 'Format', value: imageEditing.config.outputFormat.toUpperCase() },
+          ]
+        : [
+            { label: 'Videos', value: progress.totalVideos },
+            { label: 'Done', value: progress.completedVideos },
+            { label: 'Left', value: progress.remainingVideos },
+            { label: 'Failed', value: progress.failedVideos },
+            { label: 'Images', value: progress.imagesGenerated },
+          ];
   const activityLabel =
     classifyingVideos ? 'Video' : activeStep === 'classifying' ? 'Image' : 'Video';
   const completedVisible =
@@ -256,15 +307,25 @@ export default function App() {
     progress.status === 'cancelled' ||
     classifyProgress.status === 'completed' ||
     classifyProgress.status === 'cancelled' ||
-    classifyProgress.status === 'error';
+    classifyProgress.status === 'error' ||
+    imageEditProgress.status === 'completed' ||
+    imageEditProgress.status === 'cancelled' ||
+    imageEditProgress.status === 'error';
   const showTiming =
     jobActive ||
     completedVisible ||
     brandingProgress.status === 'completed' ||
-    brandingProgress.status === 'cancelled';
-  const canStartVideo = canStart && !classifyActive && !brandingActive;
+    brandingProgress.status === 'cancelled' ||
+    imageEditProgress.status === 'completed' ||
+    imageEditProgress.status === 'cancelled';
+  const canStartVideo = canStart && !classifyActive && !brandingActive && !imageEditingActive;
   const canSelectVideoFolder =
-    !busy && !canCancel && !classifyActive && !isProcessing && !brandingActive;
+    !busy &&
+    !canCancel &&
+    !classifyActive &&
+    !isProcessing &&
+    !brandingActive &&
+    !imageEditingActive;
   const canCancelActive = isProcessing || classifyActive;
 
   const toolbarAction =
@@ -280,16 +341,23 @@ export default function App() {
             label: 'Select Folder',
             icon: 'folder' as const,
             onClick: () => void imageClassification.selectImageFolder(),
-            disabled: !imageClassification.canSelectFolder || brandingActive,
+            disabled: !imageClassification.canSelectFolder || brandingActive || imageEditingActive,
           }
         : activeView === 'branding'
           ? {
               label: 'Select Folder',
               icon: 'folder' as const,
               onClick: () => void branding.selectFolder(),
-              disabled: !branding.canSelectFolder,
+              disabled: !branding.canSelectFolder || imageEditingActive,
             }
-          : undefined;
+          : activeView === 'image-editor'
+            ? {
+                label: 'Select Folder',
+                icon: 'folder' as const,
+                onClick: () => void imageEditing.selectFolder(),
+                disabled: !imageEditing.canSelectFolder,
+              }
+            : undefined;
 
   const renderWorkspace = () => {
     switch (activeView) {
@@ -323,9 +391,15 @@ export default function App() {
             videos={imageClassification.videos}
             busy={imageClassification.busy}
             allowPercent={imageClassification.allowPercent}
-            canSelectFolder={imageClassification.canSelectFolder && !brandingActive}
-            canClassifyImages={imageClassification.canClassifyImages && !brandingActive}
-            canClassifyVideos={imageClassification.canClassifyVideos && !brandingActive}
+            canSelectFolder={
+              imageClassification.canSelectFolder && !brandingActive && !imageEditingActive
+            }
+            canClassifyImages={
+              imageClassification.canClassifyImages && !brandingActive && !imageEditingActive
+            }
+            canClassifyVideos={
+              imageClassification.canClassifyVideos && !brandingActive && !imageEditingActive
+            }
             canCancel={imageClassification.canCancel}
             onSelectFolder={() => void imageClassification.selectImageFolder()}
             onClassifyImages={() => void imageClassification.startClassifyImages()}
@@ -336,17 +410,27 @@ export default function App() {
         );
       case 'branding':
         return <BrandingWorkspace branding={branding} />;
+      case 'image-editor':
+        return <ImageEditingWorkspace editor={imageEditing} />;
       case 'activity':
         return (
           <ActivityWorkspace
-            title={showBranding ? 'Branding activity' : showClassify ? 'Classification activity' : 'Processing activity'}
+            title={
+              showBranding
+                ? 'Branding activity'
+                : showClassify
+                  ? 'Classification activity'
+                  : showImageEditing
+                    ? 'Image editing activity'
+                    : 'Processing activity'
+            }
             subtitle="Follow the active job, inspect the current file, and review its event log."
             statsCards={statsCards}
             progressPercent={displayPercent}
             currentImageIndex={displayImageIndex}
             currentImageTotal={displayImageTotal}
             isProcessing={jobActive}
-            activityLabel={showBranding ? 'Video' : activityLabel}
+            activityLabel={showBranding ? 'Video' : showImageEditing ? 'Image' : activityLabel}
             estimatedRemaining={formatEstimatedRemaining(displayElapsed, displayPercent, jobActive)}
             stepLabel={
               showBranding
@@ -355,7 +439,13 @@ export default function App() {
                     ? 'Rendering preview'
                     : 'Branding videos'
                   : null
-                : stepBanner(activeStep, jobActive, classifyingVideos)
+                : showImageEditing
+                  ? imageEditingActive
+                    ? imageEditProgress.jobKind === 'preview'
+                      ? 'Rendering live preview'
+                      : 'Editing images'
+                    : null
+                  : stepBanner(activeStep, jobActive, classifyingVideos)
             }
             statusLabel={displayStatusLabel}
             currentFile={displayCurrentFile}
@@ -371,6 +461,7 @@ export default function App() {
             processing={progress}
             classification={classifyProgress}
             branding={brandingProgress}
+            imageEditing={imageEditProgress}
             videos={videos}
             imageCount={imageClassification.images.length}
             classificationVideoCount={imageClassification.videos.length}
@@ -413,6 +504,8 @@ export default function App() {
           processing={progress}
           classification={classifyProgress}
           branding={brandingProgress}
+          imageEditing={imageEditProgress}
+          imageEditingConfig={imageEditing.config}
           brandingConfig={branding.config}
           videoAllowPercent={allowPercent}
           classifyAllowPercent={imageClassification.allowPercent}
@@ -450,6 +543,7 @@ export default function App() {
               }}
             />
           }
+          imageEditPreview={<ImageEditPreview editor={imageEditing} />}
         />
       }
       statusBar={
@@ -464,21 +558,27 @@ export default function App() {
               ? brandingProgress.completedVideos
               : showClassify
                 ? classifyProgress.processedCount
-                : progress.completedVideos
+                : showImageEditing
+                  ? imageEditProgress.completedImages
+                  : progress.completedVideos
           }
           total={
             showBranding
               ? brandingProgress.totalVideos
               : showClassify
                 ? classifyProgress.currentImageTotal || classifyProgress.imageCount || classifyProgress.videoCount
-                : progress.totalVideos
+                : showImageEditing
+                  ? imageEditProgress.totalImages
+                  : progress.totalVideos
           }
           failed={
             showBranding
               ? brandingProgress.failedVideos
               : showClassify
                 ? classifyProgress.classificationFailed
-                : progress.failedVideos
+                : showImageEditing
+                  ? imageEditProgress.failedImages
+                  : progress.failedVideos
           }
           elapsed={formatElapsed(displayElapsed)}
         />

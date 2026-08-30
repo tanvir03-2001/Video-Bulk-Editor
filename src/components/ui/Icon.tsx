@@ -23,6 +23,7 @@ export type IconName =
   | 'refresh'
   | 'settings'
   | 'spark'
+  | 'star'
   | 'stop'
   | 'sun'
   | 'video';
@@ -124,6 +125,7 @@ const paths: Record<IconName, JSX.Element> = {
       <path d="m19 16 .6 2.4L22 19l-2.4.6L19 22l-.6-2.4L16 19l2.4-.6z" />
     </>
   ),
+  star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z" />,
   stop: <rect x="7" y="7" width="10" height="10" rx="1" />,
   sun: (
     <>

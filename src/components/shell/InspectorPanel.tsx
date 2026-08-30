@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { BrandingConfig, BrandingProgress } from '../../../shared/branding';
 import type { ImageClassificationProgress, ProcessingProgress } from '../../../shared/ipc';
+import type { ImageEditConfig, ImageEditProgress } from '../../../shared/imageEditing';
 import { Badge, Icon, Panel, ProgressBar, SectionHeading, StatusDot } from '../ui/ui';
 import { cx } from '../ui/cx';
 import type { AppView } from './Sidebar';
@@ -10,12 +11,15 @@ interface InspectorPanelProps {
   processing: ProcessingProgress;
   classification: ImageClassificationProgress;
   branding: BrandingProgress;
+  imageEditing: ImageEditProgress;
+  imageEditingConfig: ImageEditConfig;
   brandingConfig: BrandingConfig;
   videoAllowPercent: number;
   classifyAllowPercent: number;
   onVideoAllowPercentChange: (value: number) => void;
   onClassifyAllowPercentChange: (value: number) => void;
   brandingPreview: ReactNode;
+  imageEditPreview: ReactNode;
 }
 
 function ThresholdControl({
@@ -66,14 +70,23 @@ export function InspectorPanel({
   processing,
   classification,
   branding,
+  imageEditing,
+  imageEditingConfig,
   brandingConfig,
   videoAllowPercent,
   classifyAllowPercent,
   onVideoAllowPercentChange,
   onClassifyAllowPercentChange,
   brandingPreview,
+  imageEditPreview,
 }: InspectorPanelProps) {
-  const busy = processing.status === 'processing' || classification.status === 'classifying' || branding.status === 'processing' || branding.status === 'previewing';
+  const busy =
+    processing.status === 'processing' ||
+    classification.status === 'classifying' ||
+    branding.status === 'processing' ||
+    branding.status === 'previewing' ||
+    imageEditing.status === 'processing' ||
+    imageEditing.status === 'previewing';
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
@@ -87,6 +100,8 @@ export function InspectorPanel({
           <InspectorHeader title="Classification" description="Review split behavior" />
         ) : view === 'branding' ? (
           <InspectorHeader title="Branding setup" description="Current overlay configuration" />
+        ) : view === 'image-editor' ? (
+          <InspectorHeader title="Image editing" description="Bulk image configuration" />
         ) : view === 'activity' ? (
           <InspectorHeader title="Run details" description="Live processing telemetry" />
         ) : (
@@ -180,6 +195,48 @@ export function InspectorPanel({
           </>
         ) : null}
 
+        {view === 'image-editor' ? (
+          <>
+            <div className="sticky top-0 z-10 -mx-1 bg-surface/95 pb-3 backdrop-blur-sm">
+              {imageEditPreview}
+            </div>
+            <Panel className="space-y-3 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-200">Edit summary</p>
+                <Badge tone={imageEditReady(imageEditingConfig) ? 'success' : 'neutral'}>
+                  {imageEditReady(imageEditingConfig) ? 'Configured' : 'Not ready'}
+                </Badge>
+              </div>
+              <InspectorRow label="Preset" value={imageEditingConfig.presetName ?? 'None selected'} />
+              <InspectorRow label="Crop" value={imageEditingConfig.cropMode} />
+              <InspectorRow label="Side images" value={`${countImageEditSides(imageEditingConfig)} / 4`} />
+              <InspectorRow label="Images scanned" value={String(imageEditing.totalImages)} />
+              <InspectorRow label="Output format" value={imageEditingConfig.outputFormat.toUpperCase()} />
+              <InspectorRow label="Output" value={imageEditing.outputFolder ?? 'Default folder'} mono />
+            </Panel>
+            <Panel className="space-y-3 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500">
+                Render status
+              </p>
+              <div className="flex items-center gap-2 text-xs text-slate-300">
+                <StatusDot
+                  tone={
+                    imageEditing.status === 'processing' || imageEditing.status === 'previewing'
+                      ? 'active'
+                      : imageEditing.status === 'error'
+                        ? 'danger'
+                        : 'success'
+                  }
+                />
+                {imageEditing.message ?? 'Choose an edit setting to begin.'}
+              </div>
+              {imageEditing.totalImages > 0 ? (
+                <ProgressBar value={imageEditing.progressPercent} />
+              ) : null}
+            </Panel>
+          </>
+        ) : null}
+
         {view === 'activity' ? (
           <Panel className="space-y-3 p-3">
             <div className="flex items-center gap-2">
@@ -266,4 +323,25 @@ function formatAspectRatio(config: BrandingConfig): string {
 
 function formatOutputSize(message: string | null): string {
   return message?.match(/\b\d+x\d+\b/)?.[0] ?? 'Calculated on render';
+}
+
+function countImageEditSides(config: ImageEditConfig): number {
+  return [config.canvas.top, config.canvas.bottom, config.canvas.left, config.canvas.right].filter(
+    (side) => side.enabled,
+  ).length;
+}
+
+function imageEditReady(config: ImageEditConfig): boolean {
+  return (
+    config.filter !== 'none' ||
+    config.presetId !== null ||
+    Object.values(config.tuning).some((value) => value !== 0) ||
+    config.watermark.enabled ||
+    countImageEditSides(config) > 0 ||
+    config.canvas.aspectRatio !== 'source' ||
+    config.canvas.zoomPercent !== 100 ||
+    config.cropMode !== 'cover' ||
+    config.outputFormat !== 'jpg' ||
+    config.qualityPercent !== 92
+  );
 }

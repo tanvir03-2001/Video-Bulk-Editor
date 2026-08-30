@@ -58,6 +58,7 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "presets/**/*",
       "package.json"
     ],
     "win": {

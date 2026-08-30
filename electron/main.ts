@@ -1,12 +1,28 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   IpcChannels,
+  type ImageFile,
   type StartImageClassificationRequest,
   type StartProcessingRequest,
   type VideoFile,
 } from '../shared/ipc';
+import { ImageEditingRunner } from './services/imageEditing/imageEditingRunner';
+import {
+  DEFAULT_IMAGE_EDIT_CONFIG,
+} from '../shared/imageEditing';
+import {
+  resolveDefaultImageEditOutputFolder,
+  sanitizeImageEditConfig,
+} from './services/imageEditing/imageEditingConfig';
+import {
+  getImageEditPresetById,
+  getImageEditPresets,
+  getImageEditPreviewSource,
+  importImageEditPresets,
+} from './services/imageEditing/presetLibrary';
 import { SUPPORTED_LOGO_EXTENSIONS } from '../shared/branding';
 import { APP_DISPLAY_NAME } from '../shared/appMeta';
 import { BrandingRunner } from './services/branding/brandingRunner';
@@ -20,6 +36,7 @@ import { scanImagesInFolder } from './services/imageScanner';
 import { configureModelCacheDir } from './services/localRiskModel';
 import { ProcessingQueue } from './services/processingQueue';
 import { scanVideosInFolder } from './services/videoScanner';
+import { renderImagePreview } from './services/imageEditing/imageEditor';
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const queue = new ProcessingQueue();
@@ -27,6 +44,10 @@ const classificationRunner = new ClassificationRunner(() => queue.isRunning());
 const brandingRunner = new BrandingRunner(
   () => queue.isRunning() || classificationRunner.isRunning(),
 );
+const imageEditingRunner = new ImageEditingRunner(
+  () => queue.isRunning() || classificationRunner.isRunning(),
+);
+const presetPreviewCache = new Map<string, string>();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -46,6 +67,21 @@ function isVideoFileArray(value: unknown): value is VideoFile[] {
       typeof (item as VideoFile).path === 'string' &&
       typeof (item as VideoFile).extension === 'string' &&
       path.isAbsolute((item as VideoFile).path),
+  );
+}
+
+function isImageFileArray(value: unknown): value is ImageFile[] {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  return value.every(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as ImageFile).name === 'string' &&
+      typeof (item as ImageFile).path === 'string' &&
+      typeof (item as ImageFile).extension === 'string' &&
+      path.isAbsolute((item as ImageFile).path),
   );
 }
 
@@ -84,7 +120,9 @@ function isStartImageClassificationRequest(
   );
 }
 
-function assertNoJobRunning(currentJob: 'processing' | 'classification' | 'branding'): void {
+function assertNoJobRunning(
+  currentJob: 'processing' | 'classification' | 'branding' | 'image-editing',
+): void {
   if (currentJob !== 'processing' && queue.isRunning()) {
     throw new Error('Video processing is already running');
   }
@@ -93,6 +131,9 @@ function assertNoJobRunning(currentJob: 'processing' | 'classification' | 'brand
   }
   if (currentJob !== 'branding' && brandingRunner.isRunning()) {
     throw new Error('Video branding is already running');
+  }
+  if (currentJob !== 'image-editing' && imageEditingRunner.isRunning()) {
+    throw new Error('Image editing is already running');
   }
 }
 
@@ -144,12 +185,19 @@ function broadcastProgress(): void {
       mainWindow.webContents.send(IpcChannels.BRANDING_EVENT, event);
     }
   });
+  const unsubscribeImageEditing = imageEditingRunner.onProgress((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IpcChannels.IMAGE_EDIT_EVENT, event);
+    }
+  });
 
   app.on('before-quit', () => {
     unsubscribeVideo();
     unsubscribeClassification();
     unsubscribeBranding();
+    unsubscribeImageEditing();
     void brandingRunner.dispose();
+    void imageEditingRunner.dispose();
   });
 }
 
@@ -355,7 +403,163 @@ function registerBrandingHandlers(): void {
       throw new Error('Preview is no longer available');
     }
 
-    return fs.readFile(previewPath);
+    return new Uint8Array(await fs.readFile(previewPath));
+  });
+
+  ipcMain.handle(IpcChannels.SELECT_IMAGE_EDIT_OUTPUT_FOLDER, async () => {
+    if (!mainWindow) {
+      return null;
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Image Edit Output Folder',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle(IpcChannels.RESOLVE_IMAGE_EDIT_OUTPUT_FOLDER, (_event, folderPath: unknown) => {
+    if (!isValidAbsolutePath(folderPath)) {
+      throw new Error('Invalid folder path');
+    }
+    return resolveDefaultImageEditOutputFolder(folderPath);
+  });
+
+  ipcMain.handle(IpcChannels.LIST_IMAGE_EDIT_PRESETS, async () => {
+    return getImageEditPresets();
+  });
+
+  ipcMain.handle(IpcChannels.SELECT_IMAGE_EDIT_PRESET_FOLDER, async () => {
+    if (!mainWindow) {
+      return null;
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import Lightroom Preset Folder',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle(IpcChannels.IMPORT_IMAGE_EDIT_PRESETS, async (_event, folderPath: unknown) => {
+    if (!isValidAbsolutePath(folderPath)) {
+      throw new Error('Invalid preset folder');
+    }
+    presetPreviewCache.clear();
+    return importImageEditPresets(folderPath);
+  });
+
+  ipcMain.handle(IpcChannels.PREVIEW_IMAGE_EDIT_PRESET, async (_event, presetId: unknown) => {
+    if (typeof presetId !== 'string' || presetId.trim().length === 0) {
+      throw new Error('Invalid preset');
+    }
+    const cached = presetPreviewCache.get(presetId);
+    if (cached) {
+      return cached;
+    }
+    const preset = await getImageEditPresetById(presetId);
+    if (!preset) {
+      throw new Error('Preset is no longer available');
+    }
+    const previewConfig = {
+      ...DEFAULT_IMAGE_EDIT_CONFIG,
+      canvas: {
+        ...DEFAULT_IMAGE_EDIT_CONFIG.canvas,
+        aspectRatio: '1:1' as const,
+        top: { ...DEFAULT_IMAGE_EDIT_CONFIG.canvas.top },
+        bottom: { ...DEFAULT_IMAGE_EDIT_CONFIG.canvas.bottom },
+        left: { ...DEFAULT_IMAGE_EDIT_CONFIG.canvas.left },
+        right: { ...DEFAULT_IMAGE_EDIT_CONFIG.canvas.right },
+      },
+      presetId: preset.id,
+      presetName: preset.name,
+      filter: preset.filter,
+      tuning: {
+        ...DEFAULT_IMAGE_EDIT_CONFIG.tuning,
+        ...preset.tuning,
+      },
+      outputFormat: 'png' as const,
+    };
+    const previewDir = path.join(app.getPath('temp'), 'video-frame-generator-preset-previews');
+    const previewFile = path.join(
+      previewDir,
+      `${crypto.createHash('sha1').update(presetId).digest('hex')}.png`,
+    );
+    await renderImagePreview(getImageEditPreviewSource(), previewFile, previewConfig, true);
+    const dataUrl = `data:image/png;base64,${(await fs.readFile(previewFile)).toString('base64')}`;
+    presetPreviewCache.set(presetId, dataUrl);
+    return dataUrl;
+  });
+
+  ipcMain.handle(IpcChannels.START_IMAGE_EDIT_PREVIEW, async (_event, request: unknown) => {
+    if (typeof request !== 'object' || request === null) {
+      throw new Error('Invalid image preview request');
+    }
+    const { imagePath, config } = request as { imagePath: unknown; config: unknown };
+    if (!isValidAbsolutePath(imagePath)) {
+      throw new Error('Select a preview image first');
+    }
+    if (imageEditingRunner.isRunning()) {
+      throw new Error('Image editing is already running');
+    }
+    assertNoJobRunning('image-editing');
+    void imageEditingRunner.startPreview({
+      imagePath,
+      config: sanitizeImageEditConfig(config),
+    });
+  });
+
+  ipcMain.handle(IpcChannels.START_IMAGE_EDIT_BATCH, async (_event, request: unknown) => {
+    if (typeof request !== 'object' || request === null) {
+      throw new Error('Invalid image edit request');
+    }
+    const { folderPath, images, outputFolder, config } = request as {
+      folderPath: unknown;
+      images: unknown;
+      outputFolder: unknown;
+      config: unknown;
+    };
+    if (!isValidAbsolutePath(folderPath)) {
+      throw new Error('Invalid folder path');
+    }
+    if (!isImageFileArray(images)) {
+      throw new Error('Invalid image list');
+    }
+    if (!isValidAbsolutePath(outputFolder)) {
+      throw new Error('Invalid output folder');
+    }
+    if (path.resolve(outputFolder) === path.resolve(folderPath)) {
+      throw new Error('Output folder must be different from the source folder');
+    }
+    if (imageEditingRunner.isRunning()) {
+      throw new Error('Image editing is already running');
+    }
+    assertNoJobRunning('image-editing');
+    void imageEditingRunner.startBatch({
+      folderPath,
+      images,
+      outputFolder,
+      config: sanitizeImageEditConfig(config),
+    });
+  });
+
+  ipcMain.handle(IpcChannels.CANCEL_IMAGE_EDIT, () => {
+    imageEditingRunner.cancel();
+  });
+
+  ipcMain.handle(IpcChannels.READ_IMAGE_EDIT_PREVIEW_FILE, async (_event, previewPath: unknown) => {
+    if (!isValidAbsolutePath(previewPath)) {
+      throw new Error('Invalid preview path');
+    }
+    const currentPreview = imageEditingRunner.getProgress().previewPath;
+    if (!currentPreview || path.resolve(currentPreview) !== path.resolve(previewPath)) {
+      throw new Error('Preview is no longer available');
+    }
+    return (await fs.readFile(previewPath)).toString('base64');
   });
 }
 

@@ -16,6 +16,12 @@ import type {
   BrandingEvent,
   BrandingPreviewRequest,
 } from '../shared/branding';
+import type {
+  ImageEditBatchRequest,
+  ImageEditEvent,
+  ImageEditPreviewRequest,
+  ImageEditPresetSummary,
+} from '../shared/imageEditing';
 
 const api: ElectronApi = {
   selectFolder: (): Promise<string | null> => {
@@ -119,6 +125,68 @@ const api: ElectronApi = {
     return () => {
       ipcRenderer.removeListener(IpcChannels.BRANDING_EVENT, listener);
     };
+  },
+
+  selectImageEditOutputFolder: (): Promise<string | null> => {
+    return ipcRenderer.invoke(IpcChannels.SELECT_IMAGE_EDIT_OUTPUT_FOLDER) as Promise<string | null>;
+  },
+
+  resolveImageEditOutputFolder: (folderPath: string): Promise<string> => {
+    return ipcRenderer.invoke(
+      IpcChannels.RESOLVE_IMAGE_EDIT_OUTPUT_FOLDER,
+      folderPath,
+    ) as Promise<string>;
+  },
+
+  startImageEditPreview: (request: ImageEditPreviewRequest): Promise<void> => {
+    return ipcRenderer.invoke(
+      IpcChannels.START_IMAGE_EDIT_PREVIEW,
+      request,
+    ) as Promise<void>;
+  },
+
+  startImageEditBatch: (request: ImageEditBatchRequest): Promise<void> => {
+    return ipcRenderer.invoke(IpcChannels.START_IMAGE_EDIT_BATCH, request) as Promise<void>;
+  },
+
+  cancelImageEdit: (): Promise<void> => {
+    return ipcRenderer.invoke(IpcChannels.CANCEL_IMAGE_EDIT) as Promise<void>;
+  },
+
+  readImageEditPreviewFile: (previewPath: string): Promise<string> => {
+    return ipcRenderer.invoke(
+      IpcChannels.READ_IMAGE_EDIT_PREVIEW_FILE,
+      previewPath,
+    ) as Promise<string>;
+  },
+
+  onImageEdit: (callback: (event: ImageEditEvent) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, payload: ImageEditEvent): void => {
+      callback(payload);
+    };
+    ipcRenderer.on(IpcChannels.IMAGE_EDIT_EVENT, listener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.IMAGE_EDIT_EVENT, listener);
+    };
+  },
+
+  listImageEditPresets: (): Promise<ImageEditPresetSummary[]> => {
+    return ipcRenderer.invoke(IpcChannels.LIST_IMAGE_EDIT_PRESETS) as Promise<ImageEditPresetSummary[]>;
+  },
+
+  selectImageEditPresetFolder: (): Promise<string | null> => {
+    return ipcRenderer.invoke(IpcChannels.SELECT_IMAGE_EDIT_PRESET_FOLDER) as Promise<string | null>;
+  },
+
+  importImageEditPresets: (folderPath: string): Promise<ImageEditPresetSummary[]> => {
+    return ipcRenderer.invoke(
+      IpcChannels.IMPORT_IMAGE_EDIT_PRESETS,
+      folderPath,
+    ) as Promise<ImageEditPresetSummary[]>;
+  },
+
+  previewImageEditPreset: (presetId: string): Promise<string> => {
+    return ipcRenderer.invoke(IpcChannels.PREVIEW_IMAGE_EDIT_PRESET, presetId) as Promise<string>;
   },
 };
 
