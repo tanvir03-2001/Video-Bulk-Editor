@@ -15,6 +15,17 @@ export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Button
+          variant="secondary"
+          icon="refresh"
+          onClick={() => {
+            void composer.createNewProject();
+          }}
+          disabled={!composer.canCreateNew}
+          title="Clear videos, audio, and timeline. Watermark, side images, and moving text stay saved."
+        >
+          New Project
+        </Button>
+        <Button
           variant="primary"
           icon="frames"
           onClick={() => {

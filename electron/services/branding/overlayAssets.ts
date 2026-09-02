@@ -67,7 +67,10 @@ export async function disposeOverlayAssets(): Promise<void> {
 }
 
 function hashOptions(options: TextAssetOptions): string {
-  return createHash('sha1').update(JSON.stringify(options)).digest('hex').slice(0, 16);
+  return createHash('sha1')
+    .update(`text-lockup-v2:${JSON.stringify(options)}`)
+    .digest('hex')
+    .slice(0, 16);
 }
 
 function escapeMarkup(value: string): string {
@@ -145,36 +148,34 @@ async function rasterizeWithSharpText(options: TextAssetOptions): Promise<Raster
   return { buffer: data, width: info.width, height: info.height };
 }
 
-async function rasterizeWithSharpSvg(options: TextAssetOptions): Promise<RasterizedText> {
-  const sharp = await loadSharp();
-  const fontSize = emSizeFor(options.fontSizePx);
-  const secondaryText = options.secondaryText?.trim() ?? '';
-  const secondaryFontSize = emSizeFor(options.secondaryFontSizePx ?? options.fontSizePx * 0.38);
-  // Generous canvas; transparent padding is trimmed afterwards.
-  const primaryWidth = fontSize * 0.75 * options.text.length;
-  const secondaryWidth = secondaryFontSize * 0.75 * secondaryText.length;
-  const padding = Math.ceil(fontSize * 0.8);
-  const estimatedWidth = Math.ceil(Math.max(primaryWidth, secondaryWidth) + padding * 2);
-  const canvasHeight = Math.ceil(
-    padding + fontSize * 1.15 + (secondaryText ? secondaryFontSize * 1.45 : fontSize * 0.85) + padding,
-  );
-  const left = padding;
-  const right = estimatedWidth - padding;
-  const primaryBaseline = Math.ceil(padding + fontSize);
+function buildSingleLineSvg(options: {
+  text: string;
+  fontSize: number;
+  fontFamily: BrandingFontFamily;
+  fontWeight: BrandingFontWeight;
+  color: string;
+}): string {
+  const padding = Math.ceil(options.fontSize * 0.4);
+  const estimatedWidth = Math.ceil(options.fontSize * 0.72 * options.text.length + padding * 2);
+  const canvasHeight = Math.ceil(options.fontSize * 1.45 + padding * 2);
+  const baseline = padding + options.fontSize;
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${estimatedWidth}" height="${canvasHeight}">
-  <text x="${left}" y="${primaryBaseline}" text-anchor="start" font-family="${resolveFontFamily(
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${estimatedWidth}" height="${canvasHeight}">
+  <text x="${padding}" y="${baseline}" text-anchor="start" font-family="${resolveFontFamily(
     options.fontFamily,
-  )}" font-size="${fontSize}" font-weight="${BRANDING_FONT_WEIGHT_VALUES[options.fontWeight]}" fill="${options.color}">${escapeMarkup(options.text)}</text>
-  ${
-    secondaryText
-      ? `<text x="${right}" y="${Math.ceil(primaryBaseline + secondaryFontSize * 1.35)}" text-anchor="end" font-family="${resolveFontFamily(
-          options.fontFamily,
-        )}" font-size="${secondaryFontSize}" font-weight="${BRANDING_FONT_WEIGHT_VALUES[options.fontWeight]}" fill="${options.color}">${escapeMarkup(secondaryText)}</text>`
-      : ''
-  }
+  )}" font-size="${options.fontSize}" font-weight="${BRANDING_FONT_WEIGHT_VALUES[options.fontWeight]}" fill="${options.color}">${escapeMarkup(options.text)}</text>
 </svg>`;
+}
 
+async function rasterizeSingleLineSvg(options: {
+  text: string;
+  fontSize: number;
+  fontFamily: BrandingFontFamily;
+  fontWeight: BrandingFontWeight;
+  color: string;
+}): Promise<RasterizedText> {
+  const sharp = await loadSharp();
+  const svg = buildSingleLineSvg(options);
   const { data, info } = await sharp(Buffer.from(svg))
     .trim()
     .png()
@@ -185,6 +186,63 @@ async function rasterizeWithSharpSvg(options: TextAssetOptions): Promise<Rasteri
   }
 
   return { buffer: data, width: info.width, height: info.height };
+}
+
+/**
+ * Match the CSS preview lockup: primary on top, secondary smaller and right-aligned
+ * underneath within the same width as the primary line.
+ */
+async function rasterizeTextLockup(options: TextAssetOptions): Promise<RasterizedText> {
+  const fontSize = emSizeFor(options.fontSizePx);
+  const secondaryText = options.secondaryText?.trim() ?? '';
+  const secondaryFontSize = emSizeFor(options.secondaryFontSizePx ?? options.fontSizePx * 0.38);
+
+  const primary = await rasterizeSingleLineSvg({
+    text: options.text,
+    fontSize,
+    fontFamily: options.fontFamily,
+    fontWeight: options.fontWeight,
+    color: options.color,
+  });
+
+  if (!secondaryText) {
+    return primary;
+  }
+
+  const secondary = await rasterizeSingleLineSvg({
+    text: secondaryText,
+    fontSize: secondaryFontSize,
+    fontFamily: options.fontFamily,
+    fontWeight: options.fontWeight,
+    color: options.color,
+  });
+
+  const gap = Math.max(1, Math.round(primary.height * 0.06));
+  const lockupWidth = primary.width;
+  const lockupHeight = primary.height + gap + secondary.height;
+  const secondaryLeft = Math.max(0, lockupWidth - secondary.width);
+
+  const sharp = await loadSharp();
+  const { data, info } = await sharp({
+    create: {
+      width: lockupWidth,
+      height: lockupHeight,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      { input: primary.buffer, left: 0, top: 0 },
+      { input: secondary.buffer, left: secondaryLeft, top: primary.height + gap },
+    ])
+    .png()
+    .toBuffer({ resolveWithObject: true });
+
+  return { buffer: data, width: info.width, height: info.height };
+}
+
+async function rasterizeWithSharpSvg(options: TextAssetOptions): Promise<RasterizedText> {
+  return rasterizeTextLockup(options);
 }
 
 function escapeDrawtextValue(value: string): string {
@@ -218,13 +276,15 @@ async function rasterizeWithDrawtext(options: TextAssetOptions): Promise<Rasteri
   const fontSize = emSizeFor(options.fontSizePx);
   const secondaryText = options.secondaryText?.trim() ?? '';
   const secondaryFontSize = emSizeFor(options.secondaryFontSizePx ?? options.fontSizePx * 0.38);
-  const canvasWidth = Math.ceil(
-    Math.max(fontSize * 0.75 * options.text.length, secondaryFontSize * 0.75 * secondaryText.length) +
-      fontSize * 2,
-  );
-  const canvasHeight = Math.ceil(
-    fontSize * 1.15 + (secondaryText ? secondaryFontSize * 1.45 : fontSize * 0.85) + fontSize,
-  );
+  const padding = Math.ceil(fontSize * 0.35);
+  const primaryWidthEstimate = Math.ceil(fontSize * 0.72 * options.text.length + padding * 2);
+  const primaryHeightEstimate = Math.ceil(fontSize * 1.45 + padding * 2);
+  const gap = Math.max(1, Math.round(primaryHeightEstimate * 0.06));
+  const secondaryHeightEstimate = secondaryText
+    ? Math.ceil(secondaryFontSize * 1.45 + padding)
+    : 0;
+  const canvasWidth = primaryWidthEstimate;
+  const canvasHeight = primaryHeightEstimate + (secondaryText ? gap + secondaryHeightEstimate : 0);
   const dir = await getCacheDir();
   const outputPath = path.join(dir, `drawtext-${hashOptions(options)}.png`);
 
@@ -233,8 +293,8 @@ async function rasterizeWithDrawtext(options: TextAssetOptions): Promise<Rasteri
     `text='${escapeDrawtextValue(options.text)}'`,
     `fontcolor=${options.color}`,
     `fontsize=${fontSize}`,
-    'x=(w-text_w)/2',
-    'y=(h-text_h)/2',
+    `x=${padding}`,
+    `y=${padding}`,
   ];
   if (fontFile) {
     drawtextParts.push(`fontfile='${escapeDrawtextValue(fontFile)}'`);
@@ -246,8 +306,8 @@ async function rasterizeWithDrawtext(options: TextAssetOptions): Promise<Rasteri
       `text='${escapeDrawtextValue(secondaryText)}'`,
       `fontcolor=${options.color}`,
       `fontsize=${secondaryFontSize}`,
-      'x=(w-text_w)/2',
-      `y=${Math.ceil(fontSize * 1.05)}`,
+      `x=w-text_w-${padding}`,
+      `y=${primaryHeightEstimate + gap}`,
     ];
     if (fontFile) {
       secondaryParts.push(`fontfile='${escapeDrawtextValue(fontFile)}'`);
@@ -316,17 +376,18 @@ async function rasterizeText(options: TextAssetOptions): Promise<RasterizedText>
 }
 
 /**
- * Add a soft dark shadow behind the glyphs so light text stays readable on bright footage.
+ * Add a soft dark shadow behind the lockup so light text stays readable on bright footage.
  */
 async function applyShadow(rendered: RasterizedText, fontSizePx: number): Promise<RasterizedText> {
   const sharp = await loadSharp();
-  const offset = Math.max(1, Math.round(fontSizePx * 0.05));
-  const blur = Math.max(0.4, fontSizePx * 0.03);
-  const padding = offset * 2 + Math.ceil(blur * 2);
+  const offset = Math.max(1, Math.round(fontSizePx * 0.04));
+  const strokeWidth = Math.max(1, Math.round(fontSizePx * 0.04));
+  const padding = offset + strokeWidth + 2;
 
-  const shadow = await sharp(rendered.buffer)
-    .tint({ r: 0, g: 0, b: 0 })
-    .blur(blur)
+  const shadowLayer = await sharp(rendered.buffer)
+    .greyscale()
+    .linear(0, 0)
+    .blur(Math.max(0.5, fontSizePx * 0.02))
     .png()
     .toBuffer();
 
@@ -342,7 +403,7 @@ async function applyShadow(rendered: RasterizedText, fontSizePx: number): Promis
     },
   })
     .composite([
-      { input: shadow, left: padding + offset, top: padding + offset },
+      { input: shadowLayer, left: padding + offset, top: padding + offset, blend: 'over' },
       { input: rendered.buffer, left: padding, top: padding },
     ])
     .png()

@@ -400,7 +400,16 @@ export default function App() {
                 onClick: () => void imageEditing.selectFolder(),
                 disabled: !imageEditing.canSelectFolder,
               }
-            : undefined;
+            : activeView === 'composer'
+              ? {
+                  label: 'New Project',
+                  icon: 'refresh' as const,
+                  onClick: () => {
+                    void composer.createNewProject();
+                  },
+                  disabled: !composer.canCreateNew,
+                }
+              : undefined;
 
   const renderWorkspace = () => {
     switch (activeView) {

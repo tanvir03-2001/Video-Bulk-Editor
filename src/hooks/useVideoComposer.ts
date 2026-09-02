@@ -5,7 +5,6 @@ import {
   COMPOSER_PIPELINE_STEPS,
   COMPOSER_STEP_TOTAL,
   COMPOSER_TRANSITION_SECONDS,
-  createDefaultComposerBranding,
   INITIAL_COMPOSER_PROGRESS,
   type ComposerClip,
   type ComposerProgress,
@@ -20,6 +19,10 @@ import {
   type WatermarkConfig,
 } from '../../shared/branding';
 import type { LogEntry } from '../../shared/ipc';
+import {
+  loadStoredComposerBranding,
+  saveStoredComposerBranding,
+} from '../utils/composerBrandingStorage';
 
 export interface ComposerVideoItem {
   path: string;
@@ -40,7 +43,7 @@ export function useVideoComposer(otherJobActive: boolean) {
   const [audioPath, setAudioPath] = useState<string | null>(null);
   const [audioDurationSeconds, setAudioDurationSeconds] = useState(0);
   const [clips, setClips] = useState<ComposerClip[]>([]);
-  const [branding, setBranding] = useState<BrandingConfig>(createDefaultComposerBranding);
+  const [branding, setBranding] = useState<BrandingConfig>(loadStoredComposerBranding);
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [thumbnails, setThumbnails] = useState<Record<string, string[]>>({});
   const [proxyPaths, setProxyPaths] = useState<Record<string, string>>({});
@@ -105,6 +108,10 @@ export function useVideoComposer(otherJobActive: boolean) {
       }
     });
   }, [pushActivity]);
+
+  useEffect(() => {
+    saveStoredComposerBranding(branding);
+  }, [branding]);
 
   const targetDurationSeconds = useMemo(
     () => (audioDurationSeconds > 0 ? COMPOSER_AUDIO_DELAY_SECONDS + audioDurationSeconds : 0),
@@ -489,8 +496,44 @@ export function useVideoComposer(otherJobActive: boolean) {
     progress.status === 'importing' ||
     progress.status === 'analyzing' ||
     progress.status === 'exporting';
+
+  const createNewProject = useCallback(async () => {
+    if (isWorking) {
+      await cancel();
+    }
+
+    setVideos([]);
+    setAudioPath(null);
+    setAudioDurationSeconds(0);
+    setClips([]);
+    setThumbnails({});
+    setProxyPaths({});
+    setSelectedClipId(null);
+    setTimelinePlanned(false);
+    setError(null);
+    setExportedOutputPath(null);
+    setPlayheadSeconds(0);
+    setIsPreviewPlaying(false);
+    setTimelineZoom(28);
+    setActivityMessage(null);
+    setActivityLogs([]);
+    setProgress({ ...INITIAL_COMPOSER_PROGRESS, logs: [] });
+
+    try {
+      setOutputPath(await window.api.resolveComposerOutputPath());
+    } catch {
+      setOutputPath(null);
+    }
+
+    pushActivity('info', 'New project started — watermark, side images, and moving text kept.');
+  }, [cancel, isWorking, pushActivity]);
   const idle = !isWorking && !busy && !otherJobActive;
   const ready = videos.length > 0 && Boolean(audioPath) && Boolean(outputPath);
+  const hasProjectContent =
+    videos.length > 0 ||
+    Boolean(audioPath) ||
+    clips.length > 0 ||
+    Boolean(exportedOutputPath);
 
   const combinedLogs = useMemo(() => {
     const merged = [...activityLogs, ...progress.logs];
@@ -534,6 +577,8 @@ export function useVideoComposer(otherJobActive: boolean) {
     canAddVideos: idle,
     canExport: idle && ready,
     canCancel: isWorking,
+    canCreateNew: idle,
+    hasProjectContent,
     setSelectedClipId,
     setPlayheadSeconds,
     setIsPreviewPlaying,
@@ -554,6 +599,7 @@ export function useVideoComposer(otherJobActive: boolean) {
     selectOutputPath,
     exportVideo,
     cancel,
+    createNewProject,
   };
 }
 
