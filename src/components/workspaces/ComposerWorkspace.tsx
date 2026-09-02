@@ -10,6 +10,7 @@ interface ComposerWorkspaceProps {
 
 export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
   const selectedClip = composer.clips.find((clip) => clip.id === composer.selectedClipId) ?? null;
+  const videoOnly = composer.composerMode === 'video-only';
 
   return (
     <div className="space-y-3">
@@ -35,16 +36,18 @@ export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
         >
           Add Videos
         </Button>
-        <Button
-          variant="secondary"
-          icon="play"
-          onClick={() => {
-            void composer.selectAudio();
-          }}
-          disabled={!composer.canAddVideos}
-        >
-          Select Audio
-        </Button>
+        {!videoOnly ? (
+          <Button
+            variant="secondary"
+            icon="play"
+            onClick={() => {
+              void composer.selectAudio();
+            }}
+            disabled={!composer.canAddVideos}
+          >
+            Select Audio
+          </Button>
+        ) : null}
         <Button
           variant="success"
           icon="spark"
@@ -68,8 +71,102 @@ export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
         {composer.videos.length > 0 ? (
           <Badge tone="success">{composer.videos.length} videos</Badge>
         ) : null}
-        {composer.audioPath ? <Badge tone="accent">Audio ready</Badge> : null}
+        {!videoOnly && composer.audioPath ? <Badge tone="accent">Audio ready</Badge> : null}
       </div>
+
+      <Panel className="space-y-3 bg-surface p-3.5">
+        <p className="text-xs font-medium text-slate-300">Combine mode</p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={composer.composerMode === 'video-plus-audio' ? 'primary' : 'secondary'}
+            disabled={!composer.canAddVideos}
+            onClick={() => {
+              composer.changeComposerMode('video-plus-audio');
+            }}
+          >
+            Video + Audio
+          </Button>
+          <Button
+            size="sm"
+            variant={videoOnly ? 'primary' : 'secondary'}
+            disabled={!composer.canAddVideos}
+            onClick={() => {
+              composer.changeComposerMode('video-only');
+            }}
+          >
+            Only Video
+          </Button>
+        </div>
+
+        {videoOnly ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-md border border-surface-border bg-surface-raised px-3 py-2 text-xs text-slate-400">
+              <p className="text-slate-500">Total source duration</p>
+              <p className="mt-1 font-mono text-sm text-slate-100">
+                {composer.naturalVideoDurationSeconds.toFixed(1)}s
+              </p>
+            </div>
+            <label className="space-y-1 text-xs text-slate-400">
+              <span>Custom duration (seconds, optional)</span>
+              <input
+                type="number"
+                min={composer.naturalVideoDurationSeconds || 0}
+                step={0.5}
+                disabled={!composer.canAddVideos}
+                value={composer.customDurationSeconds ?? ''}
+                placeholder={String(composer.naturalVideoDurationSeconds.toFixed(1))}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  if (!raw.trim()) {
+                    composer.changeCustomDurationSeconds(null);
+                    return;
+                  }
+                  const next = Number(raw);
+                  composer.changeCustomDurationSeconds(
+                    Number.isFinite(next) && next > 0 ? next : null,
+                  );
+                }}
+                className="w-full rounded-md border border-surface-border bg-surface px-2.5 py-1.5 text-sm text-slate-100 outline-none focus:border-accent disabled:opacity-40"
+              />
+            </label>
+            <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="image"
+                disabled={!composer.canAddVideos}
+                onClick={() => {
+                  void composer.selectPadImage();
+                }}
+              >
+                {composer.padImagePath ? 'Change pad image' : 'Add pad image'}
+              </Button>
+              {composer.padImagePath ? (
+                <>
+                  <Badge tone="accent" className="max-w-full truncate">
+                    {composer.padImagePath.split(/[\\/]/).pop()}
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!composer.canAddVideos}
+                    onClick={() => {
+                      composer.clearPadImage();
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </>
+              ) : (
+                <p className="text-[11px] text-slate-500">
+                  Optional. If set, extra duration uses this still instead of auto-cut fillers.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </Panel>
 
       {composer.error ? (
         <Panel className="border-rose-500/30 bg-rose-950/20 px-3 py-2 text-sm text-rose-100" role="alert">
@@ -117,6 +214,8 @@ export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
         onUpdateWatermarkText={composer.updateWatermarkText}
         onUpdateMovingText={composer.updateMovingText}
         onUpdateSideImage={composer.updateSideImage}
+        onUpdateImagePreset={composer.updateImagePreset}
+        onUpdateSubtitles={composer.updateSubtitles}
         onSelectLogoImage={() => {
           void composer.selectLogoImage();
         }}
@@ -129,9 +228,9 @@ export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
       />
 
       <p className="text-xs leading-relaxed text-slate-500">
-        Videos are combined to match the audio length (starting 1 second after video begins). If
-        clips are too short, short auto-cuts from your videos are added with transitions. Default
-        clip volume is 20%.
+        {videoOnly
+          ? 'Only Video mode combines your clips without a soundtrack. Set a custom duration to extend the timeline with a pad image or auto-cut fillers.'
+          : 'Video + Audio matches the soundtrack length (starting 1 second after video begins). Short timelines get auto-cut fillers with transitions. Default clip volume is 20%.'}
       </p>
     </div>
   );

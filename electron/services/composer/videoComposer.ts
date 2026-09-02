@@ -9,6 +9,11 @@ import { probeMediaFile } from '../mediaProbe';
 import { brandVideo } from '../branding/videoBrander';
 import { hasAnyBrandingEnabled } from '../branding/brandingConfig';
 import { runFfmpegProcess } from '../branding/ffmpegProcess';
+import { buildColorGradeFilterChain } from '../videoColorGrade';
+import {
+  burnSubtitlesAss,
+  generateEnglishSubtitlesAss,
+} from '../subtitles/englishSubtitles';
 import { runTaskPool } from '../taskPool';
 import {
   FAST_EXPORT_CRF,
@@ -55,8 +60,15 @@ interface ExportSize {
 const SEGMENT_PROGRESS_WEIGHT = 70;
 const MUX_PROGRESS_WEIGHT = 29;
 
-function buildVideoFilter(size: ExportSize): string {
-  return `scale=${size.width}:${size.height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${size.width}:${size.height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=${FAST_EXPORT_FPS},format=yuv420p`;
+function buildVideoFilter(
+  size: ExportSize,
+  colorGradeFilter?: string | null,
+): string {
+  const base = `scale=${size.width}:${size.height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${size.width}:${size.height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=${FAST_EXPORT_FPS},format=yuv420p`;
+  if (colorGradeFilter && colorGradeFilter.trim().length > 0) {
+    return `${base},${colorGradeFilter.trim()}`;
+  }
+  return base;
 }
 
 function resolveTransitionDuration(
@@ -141,7 +153,9 @@ async function resolveSourceMetadata(
   shouldCancel?: () => boolean,
   registerChild?: (child: ChildProcess | null) => void,
 ): Promise<Map<string, SourceMetadata>> {
-  const uniqueSources = [...new Set(clips.map((clip) => clip.sourcePath))];
+  const uniqueSources = [
+    ...new Set(clips.filter((clip) => !clip.isPadImage).map((clip) => clip.sourcePath)),
+  ];
   const metadata = new Map<string, SourceMetadata>();
 
   for (const sourcePath of uniqueSources) {
@@ -161,6 +175,15 @@ async function resolveSourceMetadata(
     });
   }
 
+  for (const clip of clips) {
+    if (clip.isPadImage && !metadata.has(clip.sourcePath)) {
+      metadata.set(clip.sourcePath, {
+        durationSeconds: clip.durationSeconds,
+        hasAudio: false,
+      });
+    }
+  }
+
   return metadata;
 }
 
@@ -171,6 +194,7 @@ async function encodeClipSegment(options: {
   exportSize: ExportSize;
   outputPath: string;
   encodeProfile: ComposerEncodeProfile;
+  colorGradeFilter?: string | null;
   shouldCancel?: () => boolean;
   registerChild?: (child: ChildProcess | null) => void;
 }): Promise<void> {
@@ -181,11 +205,50 @@ async function encodeClipSegment(options: {
     exportSize,
     outputPath,
     encodeProfile,
+    colorGradeFilter,
     shouldCancel,
     registerChild,
   } = options;
-  const vf = buildVideoFilter(exportSize);
+  const vf = buildVideoFilter(exportSize, colorGradeFilter);
   const duration = Math.max(0.1, clip.durationSeconds);
+
+  if (clip.isPadImage) {
+    await runFfmpegProcess(
+      ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-nostdin',
+        '-loop',
+        '1',
+        '-t',
+        duration.toFixed(3),
+        '-i',
+        toFfmpegPath(clip.sourcePath),
+        '-f',
+        'lavfi',
+        '-t',
+        duration.toFixed(3),
+        '-i',
+        'anullsrc=channel_layout=stereo:sample_rate=44100',
+        '-vf',
+        vf,
+        '-map',
+        '0:v',
+        '-map',
+        '1:a',
+        ...segmentVideoArgs(encodeProfile),
+        ...segmentAudioArgs(),
+        '-shortest',
+        '-y',
+        toFfmpegPath(outputPath),
+      ],
+      { shouldCancel, registerChild },
+    );
+    return;
+  }
+
   const seekStart = Math.max(0, clip.startSeconds);
   const useSourceAudio = metadata.hasAudio && !clip.muted;
   const volume = clip.muted ? 0 : Math.max(0, Math.min(1, clip.volumePercent / 100));
@@ -425,11 +488,31 @@ export async function composeVideo(options: ComposeVideoOptions): Promise<Compos
       ? audioDurationSeconds! + audioDelaySeconds
       : 0;
   const expectedDuration = Math.max(videoDuration, audioTimelineDuration);
-  const applyBrandingPass = hasAnyBrandingEnabled(branding);
+  const colorGradeFilter =
+    branding.imagePreset?.enabled
+      ? buildColorGradeFilterChain({
+          filter: branding.imagePreset.filter,
+          tuning: branding.imagePreset.tuning,
+        })
+      : null;
+  const brandingForPass = {
+    ...branding,
+    imagePreset: {
+      ...branding.imagePreset,
+      enabled: false,
+    },
+    subtitles: {
+      ...branding.subtitles,
+      enabled: false,
+    },
+  };
+  const applyBrandingPass = hasAnyBrandingEnabled(brandingForPass);
+  const applySubtitles = Boolean(branding.subtitles?.enabled);
 
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vfg-composer-'));
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  const muxOutputPath = applyBrandingPass ? path.join(tempDir, 'muxed.mp4') : outputPath;
+  const needsPostPass = applyBrandingPass || applySubtitles;
+  const muxOutputPath = needsPostPass ? path.join(tempDir, 'muxed.mp4') : outputPath;
 
   try {
     onPhase?.('Encoding clip segments');
@@ -459,6 +542,7 @@ export async function composeVideo(options: ComposeVideoOptions): Promise<Compos
           exportSize,
           outputPath: segmentPath,
           encodeProfile,
+          colorGradeFilter,
           shouldCancel,
           registerChild,
         });
@@ -490,9 +574,9 @@ export async function composeVideo(options: ComposeVideoOptions): Promise<Compos
       encodeProfile,
       shouldCancel,
       registerChild,
-      onPercent: applyBrandingPass
+      onPercent: needsPostPass
         ? (percent) => {
-            onPercent?.(percent * 0.85);
+            onPercent?.(percent * (applyBrandingPass ? 0.75 : 0.85));
           }
         : onPercent,
     });
@@ -503,22 +587,67 @@ export async function composeVideo(options: ComposeVideoOptions): Promise<Compos
         ? `libx264 (${PREVIEW_PRESET} · 50% preview)`
         : `libx264 (${FAST_EXPORT_PRESET} · 1080p · fade)`;
 
+    let workingPath = muxOutputPath;
+
     if (applyBrandingPass) {
       onPhase?.('Applying branding overlays');
-      onPercent?.(85);
+      onPercent?.(applySubtitles ? 75 : 85);
+      const brandedPath = applySubtitles ? path.join(tempDir, 'branded.mp4') : outputPath;
       const brandResult = await brandVideo({
         videoPath: muxOutputPath,
-        outputPath,
-        config: branding,
+        outputPath: brandedPath,
+        config: brandingForPass,
         encodeProfile,
         shouldCancel,
         registerChild,
         onPercent: (percent) => {
-          onPercent?.(85 + percent * 0.15);
+          const base = applySubtitles ? 75 : 85;
+          const span = applySubtitles ? 10 : 15;
+          onPercent?.(base + percent * (span / 100));
         },
       });
+      workingPath = brandResult.outputPath;
       finalOutputPath = brandResult.outputPath;
       encoderLabel = `${encoderLabel} + ${brandResult.encoder}`;
+    }
+
+    if (applySubtitles && encodeProfile === 'export') {
+      onPhase?.('Generating English subtitles');
+      const subtitleSource =
+        hasExternalAudio && audioPath ? audioPath : workingPath;
+      const timelineOffsetSeconds =
+        hasExternalAudio && audioPath ? audioDelaySeconds : 0;
+      const assPath = await generateEnglishSubtitlesAss({
+        mediaPath: subtitleSource,
+        // Soundtrack is adelay'd onto the timeline; shift captions to match.
+        timelineOffsetSeconds,
+        onStatus: (message) => onPhase?.(message),
+        shouldCancel,
+        registerChild,
+      });
+      if (assPath) {
+        onPhase?.('Burning subtitles');
+        onPercent?.(90);
+        await burnSubtitlesAss({
+          videoPath: workingPath,
+          assPath,
+          outputPath,
+          shouldCancel,
+          registerChild,
+          onPercent: (percent) => {
+            onPercent?.(90 + percent * 0.1);
+          },
+        });
+        await fs.unlink(assPath).catch(() => {});
+        finalOutputPath = outputPath;
+        encoderLabel = `${encoderLabel} + subtitles`;
+      } else if (workingPath !== outputPath) {
+        await fs.copyFile(workingPath, outputPath);
+        finalOutputPath = outputPath;
+      }
+    } else if (workingPath !== outputPath) {
+      await fs.copyFile(workingPath, outputPath);
+      finalOutputPath = outputPath;
     }
 
     onPercent?.(100);

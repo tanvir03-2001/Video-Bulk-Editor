@@ -13,6 +13,8 @@ export const COMPOSER_TRANSITION_SECONDS = 0.5;
 export const COMPOSER_FILLER_CLIP_SECONDS = 2.5;
 export const COMPOSER_OUTPUT_DIR = 'Combined Videos';
 
+export type ComposerMode = 'video-plus-audio' | 'video-only';
+
 export interface ComposerClip {
   id: string;
   sourcePath: string;
@@ -25,6 +27,8 @@ export interface ComposerClip {
   volumePercent: number;
   muted: boolean;
   isFiller: boolean;
+  /** Still-image pad clip used to extend video-only timelines. */
+  isPadImage?: boolean;
 }
 
 /**
@@ -143,6 +147,11 @@ export interface ComposerPlanTimelineRequest {
   videos: ComposerVideoInput[];
   audioDurationSeconds: number;
   clips: ComposerClip[];
+  mode?: ComposerMode;
+  /** When mode is video-only, optional target length override. */
+  customDurationSeconds?: number | null;
+  /** Optional still image used to pad remaining duration in video-only mode. */
+  padImagePath?: string | null;
 }
 
 export interface ComposerPlanTimelineResult {
@@ -158,7 +167,7 @@ export interface ComposerSourceProbe {
 
 export interface ComposerExportRequest {
   clips: ComposerClip[];
-  audioPath: string;
+  audioPath: string | null;
   audioDelaySeconds: number;
   audioDurationSeconds?: number;
   sourceProbes?: Record<string, ComposerSourceProbe>;
@@ -167,6 +176,7 @@ export interface ComposerExportRequest {
   outputPath: string;
   outputWidth: number;
   outputHeight: number;
+  mode?: ComposerMode;
 }
 
 export interface ComposerPreviewRequest {
@@ -199,5 +209,10 @@ export function createDefaultComposerBranding(): BrandingConfig {
       left: { ...DEFAULT_BRANDING_CANVAS_CONFIG.left },
       right: { ...DEFAULT_BRANDING_CANVAS_CONFIG.right },
     },
+    imagePreset: {
+      ...DEFAULT_BRANDING_CONFIG.imagePreset,
+      tuning: { ...DEFAULT_BRANDING_CONFIG.imagePreset.tuning },
+    },
+    subtitles: { ...DEFAULT_BRANDING_CONFIG.subtitles },
   };
 }

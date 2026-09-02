@@ -92,6 +92,7 @@ export class BrandingRunner {
       status: 'previewing',
       currentFile: path.basename(videoPath),
       totalVideos: 1,
+      currentStep: 'Reading video',
       message: 'Generating preview',
       logs: this.pushLog('info', `[Branding] Generating preview for ${path.basename(videoPath)}`),
     };
@@ -129,6 +130,15 @@ export class BrandingRunner {
         registerChild: (child) => {
           this.currentChild = child;
         },
+        onStep: (step) => {
+          this.progress = {
+            ...this.progress,
+            currentStep: step,
+            message: step,
+            elapsedMs: Date.now() - this.startedAt,
+          };
+          this.emit('branding-progress');
+        },
         onPercent: (percent) => {
           this.progress = {
             ...this.progress,
@@ -153,6 +163,7 @@ export class BrandingRunner {
         progressPercent: 100,
         currentVideoPercent: 100,
         completedVideos: 1,
+        currentStep: null,
         elapsedMs: Date.now() - this.startedAt,
         message: `Preview ready (${result.encoder}, ${result.outputWidth}x${result.outputHeight}, ${config.canvas.aspectRatio})`,
         logs: this.pushLog(
@@ -187,8 +198,9 @@ export class BrandingRunner {
       completedVideos: 0,
       failedVideos: 0,
       failedFiles: [],
+      currentStep: 'Starting batch',
       message: 'Applying branding',
-      logs: this.pushLog('info', `[Branding] Starting batch — ${videos.length} videos`),
+      logs: this.pushLog('info', `[Branding] Starting batch — ${videos.length} videos (one at a time)`),
     };
     this.emit('branding-started');
 
@@ -201,12 +213,11 @@ export class BrandingRunner {
 
       await fs.mkdir(outputFolder, { recursive: true });
 
-      const concurrency = Math.min(3, Math.max(1, os.cpus().length - 1));
-      let nextIndex = 0;
-
-      const processVideo = async (index: number): Promise<void> => {
+      // Process one video fully before starting the next so progress advances
+      // per completed output (1/N, 2/N, …) with a clear current-step label.
+      for (let index = 0; index < videos.length; index += 1) {
         if (this.cancelled) {
-          return;
+          break;
         }
 
         const video = videos[index];
@@ -217,6 +228,8 @@ export class BrandingRunner {
           currentFile: video.name,
           currentVideoIndex: index + 1,
           currentVideoPercent: 0,
+          currentStep: 'Reading video',
+          message: `Processing ${video.name} (${index + 1}/${videos.length})`,
           elapsedMs: Date.now() - this.startedAt,
         };
         this.emit('branding-progress');
@@ -236,11 +249,21 @@ export class BrandingRunner {
             registerChild: (child) => {
               this.currentChild = child;
             },
+            onStep: (step) => {
+              this.progress = {
+                ...this.progress,
+                currentStep: step,
+                message: `${step} — ${video.name}`,
+                elapsedMs: Date.now() - this.startedAt,
+              };
+              this.emit('branding-progress');
+            },
             onPercent: (percent) => {
+              const finished = this.progress.completedVideos + this.progress.failedVideos;
               this.progress = {
                 ...this.progress,
                 currentVideoPercent: percent,
-                progressPercent: formatPercent(index + percent / 100, videos.length),
+                progressPercent: formatPercent(finished + percent / 100, videos.length),
                 elapsedMs: Date.now() - this.startedAt,
               };
               this.emit('branding-progress');
@@ -262,6 +285,8 @@ export class BrandingRunner {
             ...this.progress,
             completedVideos,
             encoder: result.encoder,
+            currentVideoPercent: 100,
+            currentStep: 'Video complete',
             progressPercent: formatPercent(
               completedVideos + this.progress.failedVideos,
               videos.length,
@@ -273,7 +298,7 @@ export class BrandingRunner {
         } catch (error) {
           if (error instanceof ProcessingCancelledError || this.cancelled) {
             this.cancelled = true;
-            return;
+            break;
           }
 
           const reason = error instanceof Error ? error.message : 'Unknown error';
@@ -290,6 +315,7 @@ export class BrandingRunner {
             ...this.progress,
             failedVideos,
             failedFiles: [...this.progress.failedFiles, video.name],
+            currentStep: 'Video failed',
             progressPercent: formatPercent(
               this.progress.completedVideos + failedVideos,
               videos.length,
@@ -299,20 +325,7 @@ export class BrandingRunner {
           };
           this.emit('branding-progress');
         }
-      };
-
-      const workers = Array.from({ length: concurrency }, async () => {
-        while (!this.cancelled) {
-          const index = nextIndex;
-          nextIndex += 1;
-          if (index >= videos.length) {
-            break;
-          }
-          await processVideo(index);
-        }
-      });
-
-      await Promise.all(workers);
+      }
 
       if (this.cancelled) {
         await this.writeReport(outputFolder, results, config.canvas.aspectRatio);
@@ -326,6 +339,7 @@ export class BrandingRunner {
         ...this.progress,
         status: 'completed',
         currentFile: null,
+        currentStep: null,
         progressPercent: 100,
         currentVideoPercent: 0,
         elapsedMs: Date.now() - this.startedAt,
@@ -364,7 +378,9 @@ export class BrandingRunner {
       throw new Error(ffmpegStatus.error ?? 'FFmpeg is required for video branding');
     }
     if (!hasAnyBrandingEnabled(config)) {
-      throw new Error('Enable Watermark, Moving Text, a side image, a canvas format, or zoom first.');
+      throw new Error(
+        'Enable Watermark, Moving Text, a side image, a canvas format, zoom, an image preset, or subtitles first.',
+      );
     }
     const invalidReason = validateBrandingConfig(config);
     if (invalidReason) {
@@ -384,6 +400,7 @@ export class BrandingRunner {
       jobKind: kind,
       currentVideoIndex: 0,
       currentVideoPercent: 0,
+      currentStep: null,
       progressPercent: 0,
       elapsedMs: 0,
     };
@@ -405,6 +422,7 @@ export class BrandingRunner {
     this.progress = {
       ...this.progress,
       status: 'error',
+      currentStep: null,
       elapsedMs: Date.now() - this.startedAt,
       message: reason,
       logs: this.pushLog('error', `[Branding] Failed: ${reason}`),
@@ -417,6 +435,7 @@ export class BrandingRunner {
       ...this.progress,
       status: 'cancelled',
       currentFile: null,
+      currentStep: null,
       elapsedMs: Date.now() - this.startedAt,
       message: `Branding cancelled — branded: ${this.progress.completedVideos}, failed: ${this.progress.failedVideos}`,
       logs: this.pushLog('info', '[Branding] Cancelled by user'),

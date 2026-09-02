@@ -4,6 +4,7 @@ import type { BrandingConfig, BrandingSide, WatermarkConfig } from '../../../sha
 import { MovingTextSettings } from '../branding/MovingTextSettings';
 import { SideImagesSettings } from '../branding/SideImagesSettings';
 import { WatermarkSettings } from '../branding/WatermarkSettings';
+import { PresetPicker } from '../imageEditing/PresetPicker';
 import { Icon } from '../ui/Icon';
 import { Badge, Button, Panel } from '../ui/ui';
 
@@ -18,6 +19,8 @@ interface ComposerControlsProps {
   onUpdateWatermarkText: (patch: Partial<WatermarkConfig['text']>) => void;
   onUpdateMovingText: (patch: Partial<BrandingConfig['movingText']>) => void;
   onUpdateSideImage: (side: BrandingSide, patch: Partial<BrandingConfig['canvas']['top']>) => void;
+  onUpdateImagePreset: (next: BrandingConfig['imagePreset']) => void;
+  onUpdateSubtitles: (patch: Partial<BrandingConfig['subtitles']>) => void;
   onSelectLogoImage: () => void;
   onSelectSideImage: (side: BrandingSide) => void;
   onSelectOutputPath: () => void;
@@ -75,6 +78,8 @@ export function ComposerControls({
   onUpdateWatermarkText,
   onUpdateMovingText,
   onUpdateSideImage,
+  onUpdateImagePreset,
+  onUpdateSubtitles,
   onSelectLogoImage,
   onSelectSideImage,
   onSelectOutputPath,
@@ -193,6 +198,29 @@ export function ComposerControls({
               onChange={onUpdateMovingText}
             />
           </CollapsibleSection>
+
+          <PresetPicker
+            value={branding.imagePreset}
+            disabled={disabled}
+            onChange={onUpdateImagePreset}
+          />
+
+          <Panel className="space-y-2 bg-surface p-3.5">
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={branding.subtitles.enabled}
+                disabled={disabled}
+                onChange={(event) => {
+                  onUpdateSubtitles({ enabled: event.target.checked });
+                }}
+              />
+              English reels subtitles (Local Whisper)
+            </label>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              Uses the soundtrack when selected; otherwise speech from the combined video audio.
+            </p>
+          </Panel>
         </div>
       </div>
     </div>

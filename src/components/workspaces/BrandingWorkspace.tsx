@@ -39,11 +39,12 @@ export function BrandingWorkspace({ branding }: { branding: VideoBrandingControl
         progressPercent={branding.progress.progressPercent}
         currentFile={branding.progress.currentFile}
         currentStep={
-          branding.progress.jobKind === 'preview'
+          branding.progress.currentStep
+          ?? (branding.progress.jobKind === 'preview'
             ? 'Rendering live preview'
             : branding.progress.jobKind === 'batch'
               ? 'Applying branding'
-              : null
+              : null)
         }
         completed={branding.progress.completedVideos}
         total={branding.progress.totalVideos}

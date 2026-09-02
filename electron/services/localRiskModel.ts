@@ -41,9 +41,14 @@ export function configureModelCacheDir(cacheDir: string | null | undefined): voi
   configuredCacheDir = cacheDir.trim();
 }
 
+/** Persistent transformers.js cache dir (Electron userData/models when configured). */
+export function getModelCacheDir(): string | null {
+  return getClassificationConfig().modelCacheDir || configuredCacheDir;
+}
+
 async function loadPipeline(): Promise<ZeroShotPipeline> {
   const config = getClassificationConfig();
-  const cacheDir = config.modelCacheDir || configuredCacheDir;
+  const cacheDir = getModelCacheDir();
 
   // Dynamic import keeps esbuild from trying to bundle the heavy package.
   const transformers = await import('@xenova/transformers');

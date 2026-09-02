@@ -1,5 +1,24 @@
 import type { LogEntry } from './ipc';
 
+export type ImageEditFilterRef =
+  | 'none'
+  | 'vivid'
+  | 'warm'
+  | 'cool'
+  | 'mono'
+  | 'sepia'
+  | 'cinematic'
+  | 'high-contrast';
+
+export interface ImageEditTuningRef {
+  brightnessPercent: number;
+  contrastPercent: number;
+  saturationPercent: number;
+  temperaturePercent: number;
+  hueDegrees: number;
+  sharpenPercent: number;
+}
+
 export type WatermarkMode = 'image' | 'text';
 
 export type OverlayPosition =
@@ -162,10 +181,25 @@ export interface MovingTextConfig {
   speed: MovingTextSpeed;
 }
 
+/** Lightroom-style look applied during video encode (same shape as image editing). */
+export interface BrandingImagePresetConfig {
+  enabled: boolean;
+  presetId: string | null;
+  presetName: string | null;
+  filter: ImageEditFilterRef;
+  tuning: ImageEditTuningRef;
+}
+
+export interface BrandingSubtitlesConfig {
+  enabled: boolean;
+}
+
 export interface BrandingConfig {
   watermark: WatermarkConfig;
   movingText: MovingTextConfig;
   canvas: BrandingCanvasConfig;
+  imagePreset: BrandingImagePresetConfig;
+  subtitles: BrandingSubtitlesConfig;
 }
 
 export const BRANDING_LIMITS = {
@@ -224,10 +258,31 @@ export const DEFAULT_MOVING_TEXT_CONFIG: MovingTextConfig = {
   speed: 'very-slow',
 };
 
+export const DEFAULT_BRANDING_IMAGE_PRESET: BrandingImagePresetConfig = {
+  enabled: false,
+  presetId: null,
+  presetName: null,
+  filter: 'none',
+  tuning: {
+    brightnessPercent: 0,
+    contrastPercent: 0,
+    saturationPercent: 0,
+    temperaturePercent: 0,
+    hueDegrees: 0,
+    sharpenPercent: 0,
+  },
+};
+
+export const DEFAULT_BRANDING_SUBTITLES: BrandingSubtitlesConfig = {
+  enabled: false,
+};
+
 export const DEFAULT_BRANDING_CONFIG: BrandingConfig = {
   watermark: DEFAULT_WATERMARK_CONFIG,
   movingText: DEFAULT_MOVING_TEXT_CONFIG,
   canvas: DEFAULT_BRANDING_CANVAS_CONFIG,
+  imagePreset: DEFAULT_BRANDING_IMAGE_PRESET,
+  subtitles: DEFAULT_BRANDING_SUBTITLES,
 };
 
 export const BRANDED_VIDEOS_DIR = 'Branded Videos';
@@ -247,7 +302,16 @@ export function hasAnyBrandingEnabled(config: BrandingConfig): boolean {
     (side) => side.enabled,
   );
   const hasCanvasTransform = canvas.aspectRatio !== 'source' || canvas.zoomPercent !== 100;
-  return config.watermark.enabled || config.movingText.enabled || hasSideImage || hasCanvasTransform;
+  const hasImagePreset = Boolean(config.imagePreset?.enabled && config.imagePreset.presetId);
+  const hasSubtitles = Boolean(config.subtitles?.enabled);
+  return (
+    config.watermark.enabled ||
+    config.movingText.enabled ||
+    hasSideImage ||
+    hasCanvasTransform ||
+    hasImagePreset ||
+    hasSubtitles
+  );
 }
 
 /**
@@ -255,7 +319,7 @@ export function hasAnyBrandingEnabled(config: BrandingConfig): boolean {
  */
 export function validateBrandingConfig(config: BrandingConfig): string | null {
   if (!hasAnyBrandingEnabled(config)) {
-    return 'Enable Watermark, Moving Text, a side image, a canvas format, or zoom before rendering.';
+    return 'Enable Watermark, Moving Text, a side image, a canvas format, zoom, an image preset, or subtitles before rendering.';
   }
 
   if (config.watermark.enabled && config.watermark.mode === 'image') {
@@ -324,6 +388,8 @@ export interface BrandingProgress {
   progressPercent: number;
   /** Percent of the video currently being encoded (0–100). */
   currentVideoPercent: number;
+  /** Live step label for the video currently being processed. */
+  currentStep: string | null;
   elapsedMs: number;
   encoder: string | null;
   message: string | null;
@@ -345,6 +411,7 @@ export const INITIAL_BRANDING_PROGRESS: BrandingProgress = {
   currentVideoIndex: 0,
   progressPercent: 0,
   currentVideoPercent: 0,
+  currentStep: null,
   elapsedMs: 0,
   encoder: null,
   message: null,

@@ -49,7 +49,12 @@ function sanitizeExportRequest(value: unknown): ComposerExportRequest {
   if (!Array.isArray(request.clips) || request.clips.length === 0) {
     throw new Error('Add at least one clip');
   }
-  if (typeof request.audioPath !== 'string' || request.audioPath.trim().length === 0) {
+  const mode = request.mode === 'video-only' ? 'video-only' : 'video-plus-audio';
+  const audioPath =
+    typeof request.audioPath === 'string' && request.audioPath.trim().length > 0
+      ? request.audioPath
+      : null;
+  if (mode === 'video-plus-audio' && !audioPath) {
     throw new Error('Select an audio file');
   }
   if (typeof request.outputPath !== 'string' || request.outputPath.trim().length === 0) {
@@ -66,7 +71,7 @@ function sanitizeExportRequest(value: unknown): ComposerExportRequest {
 
   return {
     clips: request.clips,
-    audioPath: request.audioPath,
+    audioPath,
     audioDelaySeconds:
       typeof request.audioDelaySeconds === 'number' ? request.audioDelaySeconds : 1,
     audioDurationSeconds:
@@ -85,6 +90,7 @@ function sanitizeExportRequest(value: unknown): ComposerExportRequest {
     outputPath: request.outputPath,
     outputWidth: request.outputWidth,
     outputHeight: request.outputHeight,
+    mode,
   };
 }
 
@@ -139,7 +145,12 @@ function sanitizePlanRequest(value: unknown): ComposerPlanTimelineRequest {
   if (!Array.isArray(request.videos) || request.videos.length === 0) {
     throw new Error('Add at least one video');
   }
-  if (typeof request.audioDurationSeconds !== 'number' || request.audioDurationSeconds <= 0) {
+  const mode = request.mode === 'video-only' ? 'video-only' : 'video-plus-audio';
+  const audioDurationSeconds =
+    typeof request.audioDurationSeconds === 'number' && request.audioDurationSeconds > 0
+      ? request.audioDurationSeconds
+      : 0;
+  if (mode === 'video-plus-audio' && audioDurationSeconds <= 0) {
     throw new Error('Audio duration must be greater than zero');
   }
   if (!Array.isArray(request.clips)) {
@@ -147,8 +158,17 @@ function sanitizePlanRequest(value: unknown): ComposerPlanTimelineRequest {
   }
   return {
     videos: request.videos,
-    audioDurationSeconds: request.audioDurationSeconds,
+    audioDurationSeconds,
     clips: request.clips,
+    mode,
+    customDurationSeconds:
+      typeof request.customDurationSeconds === 'number' && request.customDurationSeconds > 0
+        ? request.customDurationSeconds
+        : null,
+    padImagePath:
+      typeof request.padImagePath === 'string' && request.padImagePath.trim().length > 0
+        ? request.padImagePath
+        : null,
   };
 }
 
@@ -398,6 +418,9 @@ export class ComposerRunner {
         })),
         audioDurationSeconds: planRequest.audioDurationSeconds,
         userClips: planRequest.clips,
+        mode: planRequest.mode,
+        customDurationSeconds: planRequest.customDurationSeconds,
+        padImagePath: planRequest.padImagePath,
         onProgress: (message) => {
           this.setStep(4, message, {
             progressPercent: 50,

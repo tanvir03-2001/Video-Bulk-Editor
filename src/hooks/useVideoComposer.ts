@@ -7,6 +7,7 @@ import {
   COMPOSER_TRANSITION_SECONDS,
   INITIAL_COMPOSER_PROGRESS,
   type ComposerClip,
+  type ComposerMode,
   type ComposerProgress,
 } from '../../shared/composer';
 import {
@@ -14,7 +15,9 @@ import {
   validateBrandingConfig,
   type BrandingCanvasConfig,
   type BrandingConfig,
+  type BrandingImagePresetConfig,
   type BrandingSide,
+  type BrandingSubtitlesConfig,
   type MovingTextConfig,
   type WatermarkConfig,
 } from '../../shared/branding';
@@ -42,6 +45,9 @@ export function useVideoComposer(otherJobActive: boolean) {
   const [videos, setVideos] = useState<ComposerVideoItem[]>([]);
   const [audioPath, setAudioPath] = useState<string | null>(null);
   const [audioDurationSeconds, setAudioDurationSeconds] = useState(0);
+  const [composerMode, setComposerMode] = useState<ComposerMode>('video-plus-audio');
+  const [customDurationSeconds, setCustomDurationSeconds] = useState<number | null>(null);
+  const [padImagePath, setPadImagePath] = useState<string | null>(null);
   const [clips, setClips] = useState<ComposerClip[]>([]);
   const [branding, setBranding] = useState<BrandingConfig>(loadStoredComposerBranding);
   const [outputPath, setOutputPath] = useState<string | null>(null);
@@ -113,10 +119,23 @@ export function useVideoComposer(otherJobActive: boolean) {
     saveStoredComposerBranding(branding);
   }, [branding]);
 
-  const targetDurationSeconds = useMemo(
-    () => (audioDurationSeconds > 0 ? COMPOSER_AUDIO_DELAY_SECONDS + audioDurationSeconds : 0),
-    [audioDurationSeconds],
+  const naturalVideoDurationSeconds = useMemo(
+    () => videos.reduce((sum, video) => sum + Math.max(0.1, video.durationSeconds), 0),
+    [videos],
   );
+
+  const targetDurationSeconds = useMemo(() => {
+    if (composerMode === 'video-only') {
+      if (
+        customDurationSeconds !== null &&
+        customDurationSeconds > naturalVideoDurationSeconds
+      ) {
+        return customDurationSeconds;
+      }
+      return naturalVideoDurationSeconds;
+    }
+    return audioDurationSeconds > 0 ? COMPOSER_AUDIO_DELAY_SECONDS + audioDurationSeconds : 0;
+  }, [audioDurationSeconds, composerMode, customDurationSeconds, naturalVideoDurationSeconds]);
 
   const placedDuration = useMemo(
     () => clips.reduce((sum, clip) => sum + clip.durationSeconds, 0),
@@ -164,19 +183,32 @@ export function useVideoComposer(otherJobActive: boolean) {
   }, []);
 
   const planTimeline = useCallback(
-    async (items: ComposerVideoItem[], nextClips: ComposerClip[], duration: number) => {
+    async (
+      items: ComposerVideoItem[],
+      nextClips: ComposerClip[],
+      duration: number,
+      options?: {
+        mode?: ComposerMode;
+        customDuration?: number | null;
+        padImage?: string | null;
+      },
+    ) => {
+      const mode = options?.mode ?? composerMode;
       setStepActivity(4, 'Planning timeline…');
       const planned = await window.api.planComposerTimeline({
         videos: items,
-        audioDurationSeconds: duration,
+        audioDurationSeconds: mode === 'video-only' ? 0 : duration,
         clips: nextClips,
+        mode,
+        customDurationSeconds: options?.customDuration ?? customDurationSeconds,
+        padImagePath: options?.padImage ?? padImagePath,
       });
       setClips(planned.clips);
       setTimelinePlanned(true);
       setStepActivity(4, `Timeline ready (${planned.clips.length} clips)`);
       return planned;
     },
-    [setStepActivity],
+    [composerMode, customDurationSeconds, padImagePath, setStepActivity],
   );
 
   const addVideos = useCallback(async () => {
@@ -224,7 +256,9 @@ export function useVideoComposer(otherJobActive: boolean) {
       setProxyPaths((current) => ({ ...current, ...media.proxies }));
       pushActivity('success', `Added ${enriched.length} video${enriched.length === 1 ? '' : 's'}`);
 
-      if (audioPath && audioDurationSeconds > 0) {
+      if (composerMode === 'video-only') {
+        await planTimeline(nextVideos, nextClips, 0, { mode: 'video-only' });
+      } else if (audioPath && audioDurationSeconds > 0) {
         await planTimeline(nextVideos, nextClips, audioDurationSeconds);
       }
     } catch (selectError) {
@@ -238,6 +272,7 @@ export function useVideoComposer(otherJobActive: boolean) {
     audioDurationSeconds,
     audioPath,
     buildInitialClips,
+    composerMode,
     outputPath,
     planTimeline,
     pushActivity,
@@ -329,6 +364,8 @@ export function useVideoComposer(otherJobActive: boolean) {
       const rebuilt = buildInitialClips(nextVideos);
       if (audioPath && audioDurationSeconds > 0) {
         await planTimeline(nextVideos, rebuilt, audioDurationSeconds);
+      } else if (composerMode === 'video-only') {
+        await planTimeline(nextVideos, rebuilt, 0, { mode: 'video-only' });
       } else {
         setClips(rebuilt);
       }
@@ -337,7 +374,7 @@ export function useVideoComposer(otherJobActive: boolean) {
         return stillExists ? current : (rebuilt[0]?.id ?? null);
       });
     },
-    [audioDurationSeconds, audioPath, buildInitialClips, planTimeline, videos],
+    [audioDurationSeconds, audioPath, buildInitialClips, composerMode, planTimeline, videos],
   );
 
   const removeClip = useCallback(
@@ -347,7 +384,7 @@ export function useVideoComposer(otherJobActive: boolean) {
         return;
       }
 
-      if (!clip.isFiller) {
+      if (!clip.isFiller && !clip.isPadImage) {
         await removeVideo(clip.sourcePath);
         return;
       }
@@ -405,6 +442,17 @@ export function useVideoComposer(otherJobActive: boolean) {
     }));
   }, []);
 
+  const updateImagePreset = useCallback((next: BrandingImagePresetConfig) => {
+    setBranding((current) => ({ ...current, imagePreset: next }));
+  }, []);
+
+  const updateSubtitles = useCallback((patch: Partial<BrandingSubtitlesConfig>) => {
+    setBranding((current) => ({
+      ...current,
+      subtitles: { ...current.subtitles, ...patch },
+    }));
+  }, []);
+
   const selectLogoImage = useCallback(async () => {
     const selected = await window.api.selectBrandingLogo();
     if (selected) {
@@ -430,7 +478,10 @@ export function useVideoComposer(otherJobActive: boolean) {
   }, []);
 
   const exportVideo = useCallback(async () => {
-    if (!audioPath || videos.length === 0 || !outputPath) {
+    if (videos.length === 0 || !outputPath) {
+      return;
+    }
+    if (composerMode === 'video-plus-audio' && !audioPath) {
       return;
     }
 
@@ -449,15 +500,18 @@ export function useVideoComposer(otherJobActive: boolean) {
     try {
       let exportClips = clips;
       if (!timelinePlanned) {
-        const planned = await planTimeline(videos, clips, audioDurationSeconds);
+        const planned = await planTimeline(videos, clips, audioDurationSeconds, {
+          mode: composerMode,
+        });
         exportClips = planned.clips;
       }
 
       await window.api.startComposerExport({
         clips: exportClips,
-        audioPath,
+        audioPath: composerMode === 'video-plus-audio' ? audioPath : null,
         audioDelaySeconds: COMPOSER_AUDIO_DELAY_SECONDS,
-        audioDurationSeconds,
+        audioDurationSeconds:
+          composerMode === 'video-plus-audio' ? audioDurationSeconds : undefined,
         sourceProbes: Object.fromEntries(
           videos.map((video) => [
             video.path,
@@ -469,6 +523,7 @@ export function useVideoComposer(otherJobActive: boolean) {
         outputPath,
         outputWidth: videos[0].width,
         outputHeight: videos[0].height,
+        mode: composerMode,
       });
     } catch (exportError) {
       const message = exportError instanceof Error ? exportError.message : 'Unable to start export';
@@ -480,6 +535,7 @@ export function useVideoComposer(otherJobActive: boolean) {
     audioPath,
     clips,
     branding,
+    composerMode,
     outputPath,
     planTimeline,
     pushActivity,
@@ -505,6 +561,8 @@ export function useVideoComposer(otherJobActive: boolean) {
     setVideos([]);
     setAudioPath(null);
     setAudioDurationSeconds(0);
+    setCustomDurationSeconds(null);
+    setPadImagePath(null);
     setClips([]);
     setThumbnails({});
     setProxyPaths({});
@@ -528,7 +586,10 @@ export function useVideoComposer(otherJobActive: boolean) {
     pushActivity('info', 'New project started — watermark, side images, and moving text kept.');
   }, [cancel, isWorking, pushActivity]);
   const idle = !isWorking && !busy && !otherJobActive;
-  const ready = videos.length > 0 && Boolean(audioPath) && Boolean(outputPath);
+  const ready =
+    videos.length > 0 &&
+    Boolean(outputPath) &&
+    (composerMode === 'video-only' || Boolean(audioPath));
   const hasProjectContent =
     videos.length > 0 ||
     Boolean(audioPath) ||
@@ -552,6 +613,10 @@ export function useVideoComposer(otherJobActive: boolean) {
     videos,
     audioPath,
     audioDurationSeconds,
+    composerMode,
+    customDurationSeconds,
+    padImagePath,
+    naturalVideoDurationSeconds,
     targetDurationSeconds,
     placedDuration,
     clips,
@@ -583,6 +648,56 @@ export function useVideoComposer(otherJobActive: boolean) {
     setPlayheadSeconds,
     setIsPreviewPlaying,
     setTimelineZoom,
+    changeComposerMode: (mode: ComposerMode) => {
+      setComposerMode(mode);
+      setTimelinePlanned(false);
+      if (mode === 'video-only' && videos.length > 0) {
+        void planTimeline(videos, buildInitialClips(videos), 0, { mode: 'video-only' });
+      } else if (
+        mode === 'video-plus-audio' &&
+        videos.length > 0 &&
+        audioPath &&
+        audioDurationSeconds > 0
+      ) {
+        void planTimeline(videos, buildInitialClips(videos), audioDurationSeconds, {
+          mode: 'video-plus-audio',
+        });
+      }
+    },
+    changeCustomDurationSeconds: (value: number | null) => {
+      setCustomDurationSeconds(value);
+      setTimelinePlanned(false);
+      if (composerMode === 'video-only' && videos.length > 0) {
+        void planTimeline(videos, buildInitialClips(videos), 0, {
+          mode: 'video-only',
+          customDuration: value,
+        });
+      }
+    },
+    selectPadImage: async () => {
+      const selected = await window.api.selectBrandingLogo();
+      if (!selected) {
+        return;
+      }
+      setPadImagePath(selected);
+      setTimelinePlanned(false);
+      if (composerMode === 'video-only' && videos.length > 0) {
+        await planTimeline(videos, buildInitialClips(videos), 0, {
+          mode: 'video-only',
+          padImage: selected,
+        });
+      }
+    },
+    clearPadImage: () => {
+      setPadImagePath(null);
+      setTimelinePlanned(false);
+      if (composerMode === 'video-only' && videos.length > 0) {
+        void planTimeline(videos, buildInitialClips(videos), 0, {
+          mode: 'video-only',
+          padImage: null,
+        });
+      }
+    },
     addVideos,
     selectAudio,
     updateClip,
@@ -594,6 +709,8 @@ export function useVideoComposer(otherJobActive: boolean) {
     updateWatermarkText,
     updateMovingText,
     updateSideImage,
+    updateImagePreset,
+    updateSubtitles,
     selectLogoImage,
     selectSideImage,
     selectOutputPath,

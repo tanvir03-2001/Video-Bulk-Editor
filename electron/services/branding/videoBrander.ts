@@ -9,6 +9,7 @@ import {
 } from '../../../shared/branding';
 import { getFfmpegPath, getFfprobePath } from '../ffmpegPaths';
 import { ProcessingCancelledError } from '../frameGenerator';
+import { buildColorGradeFilterChain } from '../videoColorGrade';
 import { resolveCanvasLayout, type CanvasLayout, type ImageDimensions } from './canvasLayout';
 import {
   buildBrandingFilterGraph,
@@ -16,6 +17,10 @@ import {
 } from './filterGraph';
 import { runFfmpegProcess } from './ffmpegProcess';
 import { renderTextOverlayAsset } from './overlayAssets';
+import {
+  burnSubtitlesAss,
+  generateEnglishSubtitlesAss,
+} from '../subtitles/englishSubtitles';
 import {
   PREVIEW_MAX_LONG_EDGE,
   EXPORT_MAX_LONG_EDGE,
@@ -43,6 +48,8 @@ export interface BrandVideoOptions {
   shouldCancel?: () => boolean;
   registerChild?: (child: ChildProcess | null) => void;
   onPercent?: (percent: number) => void;
+  /** Human-readable step for UI progress (e.g. Reading video, Encoding). */
+  onStep?: (step: string) => void;
 }
 
 export interface BrandVideoResult {
@@ -453,7 +460,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
     throw new Error('ffmpeg is not available');
   }
 
-  const { videoPath, outputPath, config, shouldCancel, registerChild, onPercent } = options;
+  const { videoPath, outputPath, config, shouldCancel, registerChild, onPercent, onStep } = options;
   const encodeProfile = options.encodeProfile ?? 'export';
   const scaleAlgorithm = 'bilinear';
 
@@ -461,7 +468,9 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
     throw new ProcessingCancelledError();
   }
 
+  onStep?.('Reading video');
   const videoInfo = await probeVideoInfo(videoPath, shouldCancel, registerChild);
+  onStep?.('Preparing overlays');
   const assets = await prepareBrandingOverlayAssets(config, videoInfo, encodeProfile);
 
   const inputPaths: string[] = [];
@@ -495,6 +504,16 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
   }
 
   const speedPreset = MOVING_TEXT_SPEED_PRESETS[config.movingText.speed];
+  const colorGradeFilter =
+    config.imagePreset?.enabled
+      ? buildColorGradeFilterChain({
+          filter: config.imagePreset.filter,
+          tuning: config.imagePreset.tuning,
+        })
+      : null;
+  if (colorGradeFilter) {
+    onStep?.('Applying color preset');
+  }
   const graph = buildBrandingFilterGraph({
     canvas: {
       outputWidth: assets.layout.outputWidth,
@@ -528,9 +547,10 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
           }
         : null,
     scaleAlgorithm,
+    colorGradeFilter,
   });
 
-  if (!graph) {
+  if (!graph && !config.subtitles?.enabled) {
     throw new Error('No branding overlay is enabled');
   }
 
@@ -548,6 +568,76 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
+  // Subtitles-only: copy/remux first, then burn captions onto the output.
+  if (!graph && config.subtitles?.enabled) {
+    onStep?.('Preparing video for subtitles');
+    const ffmpeg = getFfmpegPath()!;
+    await runFfmpegProcess(
+      ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-nostdin',
+        '-y',
+        '-i',
+        videoPath,
+        ...(previewDuration !== null && previewStart > 0
+          ? ['-ss', previewStart.toFixed(3)]
+          : []),
+        ...(previewDuration !== null ? ['-t', previewDuration.toFixed(3)] : []),
+        '-c',
+        'copy',
+        '-movflags',
+        '+faststart',
+        outputPath,
+      ],
+      { shouldCancel, registerChild },
+    );
+
+    if (encodeProfile === 'export') {
+      onStep?.('Extracting audio for subtitles');
+      const assPath = await generateEnglishSubtitlesAss({
+        mediaPath: videoPath,
+        onStatus: (message) => onStep?.(message),
+        shouldCancel,
+        registerChild,
+      });
+      if (assPath) {
+        onStep?.('Burning subtitles');
+        const subtitledPath = `${outputPath}.subs.mp4`;
+        await burnSubtitlesAss({
+          videoPath: outputPath,
+          assPath,
+          outputPath: subtitledPath,
+          shouldCancel,
+          registerChild,
+          onPercent,
+        });
+        await fs.rename(subtitledPath, outputPath).catch(async () => {
+          await fs.copyFile(subtitledPath, outputPath);
+          await removeQuiet(subtitledPath);
+        });
+        await removeQuiet(assPath);
+      }
+    }
+
+    onStep?.('Finalizing');
+    onPercent?.(100);
+    return {
+      outputPath,
+      encoder: 'copy + subtitles',
+      videoInfo,
+      outputWidth: assets.layout.outputWidth,
+      outputHeight: assets.layout.outputHeight,
+      outputAspectRatio: config.canvas.aspectRatio,
+    };
+  }
+
+  if (!graph) {
+    throw new Error('No branding overlay is enabled');
+  }
+
   const attempts = await buildEncoderAttempts(encodeProfile);
   let lastError: unknown = null;
 
@@ -556,6 +646,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
       throw new ProcessingCancelledError();
     }
 
+    onStep?.('Encoding video');
     const args: string[] = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-threads', '0'];
 
     if (previewDuration !== null && previewStart > 0) {
@@ -616,13 +707,47 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
             return;
           }
           const seconds = microseconds / 1_000_000;
-          onPercent(Math.max(0, Math.min(100, (seconds / expectedDuration) * 100)));
+          // Leave headroom for optional subtitle burn-in.
+          const encodeCeiling = config.subtitles?.enabled ? 90 : 100;
+          onPercent(Math.max(0, Math.min(encodeCeiling, (seconds / expectedDuration) * encodeCeiling)));
         },
       });
 
+      let finalPath = outputPath;
+      if (config.subtitles?.enabled && encodeProfile === 'export') {
+        onStep?.('Extracting audio for subtitles');
+        const assPath = await generateEnglishSubtitlesAss({
+          mediaPath: videoPath,
+          onStatus: (message) => onStep?.(message),
+          shouldCancel,
+          registerChild,
+        });
+        if (assPath) {
+          onStep?.('Burning subtitles');
+          const subtitledPath = `${outputPath}.subs.mp4`;
+          await burnSubtitlesAss({
+            videoPath: outputPath,
+            assPath,
+            outputPath: subtitledPath,
+            shouldCancel,
+            registerChild,
+            onPercent: (percent) => {
+              onPercent?.(90 + percent * 0.1);
+            },
+          });
+          await fs.rename(subtitledPath, outputPath).catch(async () => {
+            await fs.copyFile(subtitledPath, outputPath);
+            await removeQuiet(subtitledPath);
+          });
+          await removeQuiet(assPath);
+          finalPath = outputPath;
+        }
+      }
+
+      onStep?.('Finalizing');
       onPercent?.(100);
       return {
-        outputPath,
+        outputPath: finalPath,
         encoder: attempt.label,
         videoInfo,
         outputWidth: assets.layout.outputWidth,

@@ -4,8 +4,10 @@ import {
   INITIAL_BRANDING_PROGRESS,
   type BrandingConfig,
   type BrandingCanvasConfig,
+  type BrandingImagePresetConfig,
   type BrandingProgress,
   type BrandingSide,
+  type BrandingSubtitlesConfig,
   type MovingTextConfig,
   type SideImageConfig,
   type WatermarkConfig,
@@ -147,6 +149,17 @@ export function useVideoBranding(otherJobActive: boolean) {
     [],
   );
 
+  const updateImagePreset = useCallback((next: BrandingImagePresetConfig) => {
+    setConfig((current) => ({ ...current, imagePreset: next }));
+  }, []);
+
+  const updateSubtitles = useCallback((patch: Partial<BrandingSubtitlesConfig>) => {
+    setConfig((current) => ({
+      ...current,
+      subtitles: { ...current.subtitles, ...patch },
+    }));
+  }, []);
+
   const selectFolder = useCallback(async () => {
     setBusy(true);
     setError(null);
@@ -223,7 +236,12 @@ export function useVideoBranding(otherJobActive: boolean) {
   ].some((side) => side.enabled);
   const canvasEnabled =
     sideImagesEnabled || config.canvas.aspectRatio !== 'source' || config.canvas.zoomPercent !== 100;
-  const brandingEnabled = config.watermark.enabled || config.movingText.enabled || canvasEnabled;
+  const brandingEnabled =
+    config.watermark.enabled ||
+    config.movingText.enabled ||
+    canvasEnabled ||
+    Boolean(config.imagePreset?.enabled && config.imagePreset.presetId) ||
+    Boolean(config.subtitles?.enabled);
   const logoMissing =
     config.watermark.enabled && config.watermark.mode === 'image' && !config.watermark.imagePath;
   const sideImageMissing = [
@@ -305,6 +323,8 @@ export function useVideoBranding(otherJobActive: boolean) {
     updateMovingText,
     updateCanvas,
     updateSideImage,
+    updateImagePreset,
+    updateSubtitles,
     selectFolder,
     selectLogo,
     selectSideImage,

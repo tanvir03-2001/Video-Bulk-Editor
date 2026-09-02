@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import {
   COMPOSER_AUDIO_DELAY_SECONDS,
   COMPOSER_DEFAULT_VOLUME_PERCENT,
@@ -6,6 +7,7 @@ import {
   COMPOSER_TRANSITION_SECONDS,
   computeEffectiveTimelineDuration,
   type ComposerClip,
+  type ComposerMode,
 } from '../../../shared/composer';
 
 export interface PlannerVideoInput {
@@ -24,6 +26,9 @@ interface BuildTimelineOptions {
   videos: PlannerVideoInput[];
   audioDurationSeconds: number;
   userClips?: ComposerClip[];
+  mode?: ComposerMode;
+  customDurationSeconds?: number | null;
+  padImagePath?: string | null;
   onProgress?: (message: string) => void;
 }
 
@@ -58,7 +63,7 @@ function buildPrimaryClips(videos: PlannerVideoInput[]): ComposerClip[] {
 
 /**
  * Append short cuts from source videos (round-robin, staggered offsets) until
- * effective timeline duration reaches the audio target. No freeze frames.
+ * effective timeline duration reaches the target. No freeze frames.
  */
 function appendAutoCutExtensions(
   clips: ComposerClip[],
@@ -82,8 +87,6 @@ function appendAutoCutExtensions(
       break;
     }
 
-    // Adding one more clip introduces one more transition overlap of transitionSeconds.
-    // Clip length must cover remainingEffective plus that new overlap.
     const nextTransition =
       result.length >= 1
         ? resolveTransitionSeconds([...durations, COMPOSER_FILLER_CLIP_SECONDS])
@@ -136,35 +139,121 @@ function appendAutoCutExtensions(
   return normalizeClipTimeline(result);
 }
 
+function appendPadImageExtension(
+  clips: ComposerClip[],
+  padImagePath: string,
+  targetDurationSeconds: number,
+  onProgress?: (message: string) => void,
+): ComposerClip[] {
+  const result = [...clips];
+  const durations = result.map((clip) => clip.durationSeconds);
+  const transitionSeconds = resolveTransitionSeconds(durations);
+  const effective = computeEffectiveTimelineDuration(result, transitionSeconds);
+  const remaining = targetDurationSeconds - effective;
+  if (remaining <= 0.05) {
+    return normalizeClipTimeline(result);
+  }
+
+  const nextTransition =
+    result.length >= 1 ? resolveTransitionSeconds([...durations, remaining]) : 0;
+  const padDuration = remaining + (result.length >= 1 ? nextTransition : 0);
+  const lastClip = result[result.length - 1];
+  const timelineOffset = lastClip
+    ? lastClip.timelineOffset + lastClip.durationSeconds
+    : 0;
+
+  result.push({
+    id: randomUUID(),
+    sourcePath: padImagePath,
+    sourceName: path.basename(padImagePath),
+    startSeconds: 0,
+    durationSeconds: Math.max(0.1, padDuration),
+    timelineOffset,
+    volumePercent: 0,
+    muted: true,
+    isFiller: true,
+    isPadImage: true,
+  });
+
+  onProgress?.(`Pad image extension (+${padDuration.toFixed(1)}s)`);
+  return normalizeClipTimeline(result);
+}
+
 export async function buildComposerTimeline(
   options: BuildTimelineOptions,
 ): Promise<PlannedTimeline> {
-  const { videos, audioDurationSeconds, userClips, onProgress } = options;
+  const {
+    videos,
+    audioDurationSeconds,
+    userClips,
+    mode = 'video-plus-audio',
+    customDurationSeconds,
+    padImagePath,
+    onProgress,
+  } = options;
 
   if (videos.length === 0) {
     throw new Error('Add at least one video');
   }
+
+  const baseClips =
+    userClips && userClips.length > 0
+      ? [...userClips]
+          .filter((clip) => !clip.isFiller && !clip.isPadImage)
+          .sort((a, b) => a.timelineOffset - b.timelineOffset)
+      : buildPrimaryClips(videos);
+
+  const primary =
+    baseClips.length === 0 ? buildPrimaryClips(videos) : normalizeClipTimeline(baseClips);
+  const primaryDurations = primary.map((clip) => clip.durationSeconds);
+  const primaryTransition = resolveTransitionSeconds(primaryDurations);
+  const naturalDuration = computeEffectiveTimelineDuration(primary, primaryTransition);
+
+  if (mode === 'video-only') {
+    const custom =
+      typeof customDurationSeconds === 'number' && Number.isFinite(customDurationSeconds)
+        ? customDurationSeconds
+        : null;
+    const targetDurationSeconds =
+      custom !== null && custom > naturalDuration ? custom : naturalDuration;
+
+    let clips = primary;
+    if (targetDurationSeconds > naturalDuration + 0.05) {
+      if (padImagePath && padImagePath.trim().length > 0) {
+        clips = appendPadImageExtension(
+          primary,
+          padImagePath,
+          targetDurationSeconds,
+          onProgress,
+        );
+      } else {
+        clips = appendAutoCutExtensions(
+          primary,
+          videos,
+          targetDurationSeconds,
+          onProgress,
+        );
+      }
+    }
+
+    return {
+      clips,
+      targetDurationSeconds,
+      audioDurationSeconds: 0,
+    };
+  }
+
   if (audioDurationSeconds <= 0) {
     throw new Error('Audio duration must be greater than zero');
   }
 
   const targetDurationSeconds = COMPOSER_AUDIO_DELAY_SECONDS + audioDurationSeconds;
-  const baseClips =
-    userClips && userClips.length > 0
-      ? [...userClips]
-          .filter((clip) => !clip.isFiller)
-          .sort((a, b) => a.timelineOffset - b.timelineOffset)
-      : buildPrimaryClips(videos);
-
-  const clips =
-    baseClips.length === 0
-      ? buildPrimaryClips(videos)
-      : appendAutoCutExtensions(
-          normalizeClipTimeline(baseClips),
-          videos,
-          targetDurationSeconds,
-          onProgress,
-        );
+  const clips = appendAutoCutExtensions(
+    primary,
+    videos,
+    targetDurationSeconds,
+    onProgress,
+  );
 
   return {
     clips,

@@ -158,13 +158,20 @@ export function sanitizeBrandingConfig(raw: unknown): BrandingConfig {
   const source = (raw ?? {}) as Partial<BrandingConfig>;
   const watermarkSource = (source.watermark ?? {}) as Partial<BrandingConfig['watermark']>;
   const movingTextSource = (source.movingText ?? {}) as Partial<BrandingConfig['movingText']>;
+  const imagePresetSource = (source.imagePreset ?? {}) as Partial<BrandingConfig['imagePreset']>;
+  const subtitlesSource = (source.subtitles ?? {}) as Partial<BrandingConfig['subtitles']>;
   const watermarkDefaults = DEFAULT_BRANDING_CONFIG.watermark;
   const movingTextDefaults = DEFAULT_BRANDING_CONFIG.movingText;
+  const imagePresetDefaults = DEFAULT_BRANDING_CONFIG.imagePreset;
 
   const imagePath =
     typeof watermarkSource.imagePath === 'string' && watermarkSource.imagePath.trim().length > 0
       ? watermarkSource.imagePath
       : null;
+
+  const tuningSource = (imagePresetSource.tuning ?? {}) as Partial<
+    BrandingConfig['imagePreset']['tuning']
+  >;
 
   return {
     watermark: {
@@ -218,6 +225,62 @@ export function sanitizeBrandingConfig(raw: unknown): BrandingConfig {
       ),
     },
     canvas: sanitizeCanvasConfig(source.canvas),
+    imagePreset: {
+      enabled: imagePresetSource.enabled === true,
+      presetId:
+        typeof imagePresetSource.presetId === 'string' && imagePresetSource.presetId.length > 0
+          ? imagePresetSource.presetId
+          : null,
+      presetName:
+        typeof imagePresetSource.presetName === 'string' && imagePresetSource.presetName.length > 0
+          ? imagePresetSource.presetName
+          : null,
+      filter:
+        typeof imagePresetSource.filter === 'string'
+          ? (imagePresetSource.filter as BrandingConfig['imagePreset']['filter'])
+          : imagePresetDefaults.filter,
+      tuning: {
+        brightnessPercent: clampNumber(
+          tuningSource.brightnessPercent,
+          -100,
+          100,
+          imagePresetDefaults.tuning.brightnessPercent,
+        ),
+        contrastPercent: clampNumber(
+          tuningSource.contrastPercent,
+          -100,
+          100,
+          imagePresetDefaults.tuning.contrastPercent,
+        ),
+        saturationPercent: clampNumber(
+          tuningSource.saturationPercent,
+          -100,
+          100,
+          imagePresetDefaults.tuning.saturationPercent,
+        ),
+        temperaturePercent: clampNumber(
+          tuningSource.temperaturePercent,
+          -100,
+          100,
+          imagePresetDefaults.tuning.temperaturePercent,
+        ),
+        hueDegrees: clampNumber(
+          tuningSource.hueDegrees,
+          -180,
+          180,
+          imagePresetDefaults.tuning.hueDegrees,
+        ),
+        sharpenPercent: clampNumber(
+          tuningSource.sharpenPercent,
+          0,
+          100,
+          imagePresetDefaults.tuning.sharpenPercent,
+        ),
+      },
+    },
+    subtitles: {
+      enabled: subtitlesSource.enabled === true,
+    },
   };
 }
 

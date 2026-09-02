@@ -4,6 +4,7 @@ import { CanvasSettings } from './CanvasSettings';
 import { MovingTextSettings } from './MovingTextSettings';
 import { SideImagesSettings } from './SideImagesSettings';
 import { WatermarkSettings } from './WatermarkSettings';
+import { PresetPicker } from '../imageEditing/PresetPicker';
 import { Badge, Button, Panel } from '../ui/ui';
 
 interface VideoBrandingPanelProps {
@@ -94,6 +95,29 @@ export function VideoBrandingPanel({ branding, showPreview = true }: VideoBrandi
               onChange={branding.updateMovingText}
             />
           </div>
+
+          <PresetPicker
+            value={branding.config.imagePreset}
+            disabled={settingsDisabled}
+            onChange={branding.updateImagePreset}
+          />
+
+          <Panel className="space-y-2 bg-surface p-3.5">
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={branding.config.subtitles.enabled}
+                disabled={settingsDisabled}
+                onChange={(event) => {
+                  branding.updateSubtitles({ enabled: event.target.checked });
+                }}
+              />
+              English reels subtitles (Local Whisper)
+            </label>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              Extracts speech from each video&apos;s audio and burns modern word-by-word captions.
+            </p>
+          </Panel>
         </div>
 
         {showPreview ? (

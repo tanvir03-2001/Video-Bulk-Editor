@@ -47,6 +47,8 @@ export interface BrandingFilterGraphOptions {
   watermark?: WatermarkOverlayPlan | null;
   movingText?: MovingTextOverlayPlan | null;
   scaleAlgorithm?: ScaleAlgorithm;
+  /** Optional FFmpeg color-grade chain applied after canvas scale/pad. */
+  colorGradeFilter?: string | null;
 }
 
 export interface BrandingFilterGraph {
@@ -117,7 +119,20 @@ export function buildBrandingFilterGraph(
 ): BrandingFilterGraph | null {
   const { canvas, sideImages = [], watermark, movingText } = options;
   const scaleFlags = options.scaleAlgorithm ?? 'lanczos';
-  if (!watermark && !movingText && sideImages.length === 0 && canvas.zoomPercent === 100) {
+  const colorGrade = options.colorGradeFilter?.trim() || null;
+  const needsCanvasPad =
+    Math.round(canvas.videoX) !== 0 ||
+    Math.round(canvas.videoY) !== 0 ||
+    Math.round(canvas.outputWidth) !== Math.round(canvas.videoWidth) ||
+    Math.round(canvas.outputHeight) !== Math.round(canvas.videoHeight);
+  if (
+    !watermark &&
+    !movingText &&
+    sideImages.length === 0 &&
+    canvas.zoomPercent === 100 &&
+    !colorGrade &&
+    !needsCanvasPad
+  ) {
     return null;
   }
 
@@ -132,8 +147,9 @@ export function buildBrandingFilterGraph(
   const coverHeight = Math.max(2, Math.round(videoHeight * zoom));
   const backgroundColor = canvas.backgroundColor || 'black';
 
+  const gradeSuffix = colorGrade ? `,${colorGrade}` : '';
   chains.push(
-    `[0:v]scale=${coverWidth}:${coverHeight}:force_original_aspect_ratio=increase:flags=${scaleFlags},pad=w='max(iw,${videoWidth})':h='max(ih,${videoHeight})':x='(ow-iw)/2':y='(oh-ih)/2':color=${backgroundColor},crop=${videoWidth}:${videoHeight}:(iw-${videoWidth})/2:(ih-${videoHeight})/2,setsar=1,format=rgba,pad=${outputWidth}:${outputHeight}:${Math.round(canvas.videoX)}:${Math.round(canvas.videoY)}:color=${backgroundColor}[canvas0]`,
+    `[0:v]scale=${coverWidth}:${coverHeight}:force_original_aspect_ratio=increase:flags=${scaleFlags},pad=w='max(iw,${videoWidth})':h='max(ih,${videoHeight})':x='(ow-iw)/2':y='(oh-ih)/2':color=${backgroundColor},crop=${videoWidth}:${videoHeight}:(iw-${videoWidth})/2:(ih-${videoHeight})/2,setsar=1,format=rgba,pad=${outputWidth}:${outputHeight}:${Math.round(canvas.videoX)}:${Math.round(canvas.videoY)}:color=${backgroundColor}${gradeSuffix}[canvas0]`,
   );
   let currentLabel = 'canvas0';
 

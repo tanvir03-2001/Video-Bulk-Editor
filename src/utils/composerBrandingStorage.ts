@@ -30,6 +30,18 @@ function mergeComposerBranding(raw: Partial<BrandingConfig> | null | undefined):
       left: { ...defaults.canvas.left, ...raw.canvas?.left },
       right: { ...defaults.canvas.right, ...raw.canvas?.right },
     },
+    imagePreset: {
+      ...defaults.imagePreset,
+      ...raw.imagePreset,
+      tuning: {
+        ...defaults.imagePreset.tuning,
+        ...raw.imagePreset?.tuning,
+      },
+    },
+    subtitles: {
+      ...defaults.subtitles,
+      ...raw.subtitles,
+    },
   };
 }
 
