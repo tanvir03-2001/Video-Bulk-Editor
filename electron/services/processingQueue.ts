@@ -261,11 +261,24 @@ export class ProcessingQueue {
       }
 
       const report = buildVideoFrameReport(reportEntries, getRuntimeAllowPercent() ?? allowPercent);
-      await fs.writeFile(
-        path.join(outputDir, CLASSIFICATION_REPORT_FILE),
-        `${JSON.stringify(report, null, 2)}\n`,
-        'utf8',
-      );
+      try {
+        await fs.writeFile(
+          path.join(outputDir, CLASSIFICATION_REPORT_FILE),
+          `${JSON.stringify(report, null, 2)}\n`,
+          'utf8',
+        );
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Failed to write classification report';
+        this.progress = {
+          ...this.progress,
+          status: 'error',
+          currentStep: 'done',
+          message: reason,
+          logs: this.pushLog('error', `Report write failed: ${reason}`),
+        };
+        this.emit('processing-progress');
+        return;
+      }
 
       this.progress = {
         ...this.progress,
@@ -281,6 +294,28 @@ export class ProcessingQueue {
         ),
       };
       this.emit('processing-completed');
+    } catch (error) {
+      if (error instanceof ProcessingCancelledError || this.cancelled) {
+        this.progress = {
+          ...this.progress,
+          status: 'cancelled',
+          currentStep: 'done',
+          message: `Processing Cancelled — Completed: ${this.progress.completedVideos}, Remaining: ${this.progress.remainingVideos}, Images Generated: ${this.progress.imagesGenerated}`,
+          logs: this.pushLog('info', 'Processing cancelled by user'),
+        };
+        this.emit('processing-cancelled');
+        return;
+      }
+
+      const reason = error instanceof Error ? error.message : 'Processing failed';
+      this.progress = {
+        ...this.progress,
+        status: 'error',
+        currentStep: 'done',
+        message: reason,
+        logs: this.pushLog('error', `Processing failed: ${reason}`),
+      };
+      this.emit('processing-progress');
     } finally {
       clearRuntimeAllowPercent();
       this.currentChild = null;

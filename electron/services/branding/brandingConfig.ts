@@ -280,6 +280,18 @@ export function sanitizeBrandingConfig(raw: unknown): BrandingConfig {
     },
     subtitles: {
       enabled: subtitlesSource.enabled === true,
+      xPercent: clampNumber(
+        subtitlesSource.xPercent,
+        BRANDING_LIMITS.subtitlePositionPercent.min,
+        BRANDING_LIMITS.subtitlePositionPercent.max,
+        DEFAULT_BRANDING_CONFIG.subtitles.xPercent,
+      ),
+      yPercent: clampNumber(
+        subtitlesSource.yPercent,
+        BRANDING_LIMITS.subtitlePositionPercent.min,
+        BRANDING_LIMITS.subtitlePositionPercent.max,
+        DEFAULT_BRANDING_CONFIG.subtitles.yPercent,
+      ),
     },
   };
 }

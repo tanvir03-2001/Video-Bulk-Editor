@@ -270,10 +270,14 @@ export function ComposerPreview({
   };
 
   const showBranding = !isExported;
+  const ratioValue =
+    previewWidth && previewHeight && previewWidth > 0 && previewHeight > 0
+      ? previewWidth / previewHeight
+      : 16 / 9;
 
   return (
-    <Panel className="space-y-3 bg-surface p-3.5">
-      <div className="flex items-center justify-between gap-2">
+    <Panel className="flex h-full min-h-0 flex-col gap-2 overflow-hidden bg-surface p-3">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <p className="text-xs font-medium text-slate-300">{label ?? 'Preview'}</p>
         <div className="flex items-center gap-2">
           {isExported ? (
@@ -283,67 +287,87 @@ export function ComposerPreview({
           ) : null}
         </div>
       </div>
-      <div
-        className="relative mx-auto w-full max-w-full overflow-hidden rounded-lg border border-surface-border bg-black shadow-inner [container-type:size]"
-        style={{ aspectRatio }}
-      >
-        {videoUrl && !playbackError ? (
-          <>
-            <video
-              ref={videoRef}
-              key={isExported ? videoUrl : (timelinePosition?.clip.id ?? videoUrl)}
-              src={videoUrl}
-              controls={isExported}
-              playsInline
-              muted={!isExported}
-              onPlay={() => {
-                if (isExported) {
-                  onPlayingChange?.(true);
-                  return;
-                }
-                onPlayingChange?.(true);
-              }}
-              onPause={() => {
-                onPlayingChange?.(false);
-              }}
-              onSeeked={() => {
-                if (isExported) {
-                  const video = videoRef.current;
-                  if (video) {
-                    onPlayheadChange?.(video.currentTime);
+      <div className="min-h-0 flex-1 overflow-hidden [container-type:size]">
+        <div className="flex h-full w-full items-center justify-center">
+          <div
+            className="relative overflow-hidden rounded-lg border border-surface-border bg-black shadow-inner [container-type:size]"
+            style={{
+              aspectRatio,
+              width: `min(100cqw, calc(100cqh * ${ratioValue}))`,
+              height: `min(100cqh, calc(100cqw / ${ratioValue}))`,
+            }}
+          >
+            {videoUrl && !playbackError ? (
+              <>
+                <video
+                  ref={videoRef}
+                  key={isExported ? videoUrl : (timelinePosition?.clip.id ?? videoUrl)}
+                  src={videoUrl}
+                  controls={isExported}
+                  playsInline
+                  muted={!isExported}
+                  onPlay={() => {
+                    if (isExported) {
+                      onPlayingChange?.(true);
+                      return;
+                    }
+                    onPlayingChange?.(true);
+                  }}
+                  onPause={() => {
+                    onPlayingChange?.(false);
+                  }}
+                  onSeeked={() => {
+                    if (isExported) {
+                      const video = videoRef.current;
+                      if (video) {
+                        onPlayheadChange?.(video.currentTime);
+                      }
+                      return;
+                    }
+                    syncingFromTimelineRef.current = false;
+                  }}
+                  onTimeUpdate={handleVideoTimeUpdate}
+                  onEnded={() => {
+                    onPlayingChange?.(false);
+                  }}
+                  onError={() => {
+                    setPlaybackError(true);
+                  }}
+                  className="absolute inset-0 block h-full w-full object-cover"
+                  style={
+                    showBranding && branding.canvas.zoomPercent !== 100
+                      ? {
+                          transform: `scale(${Math.max(0.5, Math.min(2, branding.canvas.zoomPercent / 100))})`,
+                        }
+                      : undefined
                   }
-                  return;
-                }
-                syncingFromTimelineRef.current = false;
-              }}
-              onTimeUpdate={handleVideoTimeUpdate}
-              onEnded={() => {
-                onPlayingChange?.(false);
-              }}
-              onError={() => {
-                setPlaybackError(true);
-              }}
-              className="block h-full w-full object-contain"
-            />
-            {audioUrl && !isExported ? (
-              <audio ref={audioRef} src={audioUrl} preload="auto" className="hidden" />
-            ) : null}
-            {showBranding ? <BrandingCssOverlay config={branding} /> : null}
-          </>
-        ) : videoUrl && playbackError ? (
-          <div className="flex min-h-[160px] items-center justify-center px-3 text-center text-xs leading-relaxed text-rose-200">
-            Preview could not be played. Try removing and re-adding the video.
+                />
+                {audioUrl && !isExported ? (
+                  <audio ref={audioRef} src={audioUrl} preload="auto" className="hidden" />
+                ) : null}
+                {showBranding ? (
+                  <BrandingCssOverlay
+                    config={branding}
+                    sourceWidth={previewWidth && previewWidth > 0 ? previewWidth : 16}
+                    sourceHeight={previewHeight && previewHeight > 0 ? previewHeight : 9}
+                  />
+                ) : null}
+              </>
+            ) : videoUrl && playbackError ? (
+              <div className="flex h-full items-center justify-center px-3 text-center text-xs leading-relaxed text-rose-200">
+                Preview could not be played. Try removing and re-adding the video.
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center px-3 text-center text-xs leading-relaxed text-slate-400">
+                {clips.length > 0 ? 'Loading preview…' : 'Add videos to see a live preview.'}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex min-h-[160px] items-center justify-center px-3 text-center text-xs leading-relaxed text-slate-400">
-            {clips.length > 0 ? 'Loading preview…' : 'Add videos to see a live preview.'}
-          </div>
-        )}
+        </div>
       </div>
       {!isExported && clips.length > 0 ? (
-        <p className="text-xs leading-relaxed text-slate-500">
-          Instant preview plays from the timeline immediately. Watermark, side images, and moving text
-          update live in the inspector.
+        <p className="shrink-0 text-[11px] leading-relaxed text-slate-500">
+          Instant preview follows the timeline. Branding overlays update live on this stage.
         </p>
       ) : null}
     </Panel>

@@ -1,61 +1,40 @@
 import type { ImageEditingController } from '../../hooks/useImageEditing';
-import { Button, Panel, SectionHeading, StatCard } from '../ui/ui';
-import { WorkflowProgressCard } from '../ui/WorkflowProgressCard';
+import { ImageEditPreview } from '../imageEditing/ImageEditPreview';
 import { ImageEditingPanel } from '../imageEditing/ImageEditingPanel';
+import {
+  AlertBanner,
+  Badge,
+  Button,
+  EditorChrome,
+  Icon,
+  ProgressBar,
+  StatCard,
+  StatusDot,
+  ToolbarRow,
+} from '../ui/ui';
 
 export function ImageEditingWorkspace({ editor }: { editor: ImageEditingController }) {
+  const active =
+    editor.progress.status === 'processing' || editor.progress.status === 'previewing';
+  const finished = editor.progress.status === 'completed';
+
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 p-5 lg:p-7">
-      <SectionHeading
-        eyebrow="Creative workspace"
-        title="Image Editing"
-        description="Apply one organized edit setup to a folder of images while keeping every original file untouched."
-      />
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard
-          label="Source images"
-          value={editor.images.length}
-          detail={editor.folder ?? 'Select a folder'}
-          tone="accent"
-        />
-        <StatCard
-          label="Output"
-          value={editor.outputFolder ? 'Ready' : 'Not set'}
-          detail="Written to a separate folder"
-          tone={editor.outputFolder ? 'success' : 'neutral'}
-        />
-        <StatCard
-          label="Last run"
-          value={editor.progress.completedImages}
-          detail={editor.progress.message ?? 'No batch rendered yet'}
-        />
-      </div>
-
-      {editor.error ? (
-        <Panel className="flex items-start gap-3 border-rose-500/30 bg-rose-950/20 p-4" role="alert">
-          <span className="mt-0.5 text-rose-300">!</span>
-          <div>
-            <p className="text-sm font-medium text-rose-100">Image editing needs attention</p>
-            <p className="mt-1 text-sm leading-relaxed text-rose-200/80">{editor.error}</p>
-          </div>
-        </Panel>
-      ) : null}
-
-      <Panel className="flex flex-wrap items-center justify-between gap-3 bg-surface/80 p-4">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-100">Image batch</p>
-          <p className="mt-1 truncate font-mono text-xs text-slate-400" title={editor.folder ?? undefined}>
-            {editor.folder ?? 'No source folder selected'}
-          </p>
-          {editor.images.length > 0 ? (
-            <p className="mt-1 text-xs text-emerald-300">
-              {editor.images.length} supported image{editor.images.length === 1 ? '' : 's'} ready
+    <EditorChrome>
+      <ToolbarRow className="justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">
+              Creative
             </p>
+            <h2 className="truncate text-sm font-semibold text-white">Image Editing</h2>
+          </div>
+          {editor.images.length > 0 ? (
+            <Badge tone="success">
+              {editor.images.length} image{editor.images.length === 1 ? '' : 's'}
+            </Badge>
           ) : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
           <Button
+            size="sm"
             variant="primary"
             icon="folder"
             disabled={!editor.canSelectFolder}
@@ -66,6 +45,7 @@ export function ImageEditingWorkspace({ editor }: { editor: ImageEditingControll
             Select Folder
           </Button>
           <Button
+            size="sm"
             variant="success"
             icon="play"
             disabled={!editor.canApply}
@@ -76,6 +56,7 @@ export function ImageEditingWorkspace({ editor }: { editor: ImageEditingControll
             Apply to All
           </Button>
           <Button
+            size="sm"
             variant="secondary"
             icon="refresh"
             disabled={!editor.canPreview || !editor.previewImagePath}
@@ -86,33 +67,79 @@ export function ImageEditingWorkspace({ editor }: { editor: ImageEditingControll
             Refresh Preview
           </Button>
         </div>
-      </Panel>
+        <div className="grid w-full max-w-xl grid-cols-3 gap-2 sm:w-auto">
+          <StatCard
+            compact
+            label="Source"
+            value={editor.images.length}
+            detail={editor.folder ? 'Folder set' : 'Select folder'}
+            tone="accent"
+          />
+          <StatCard
+            compact
+            label="Output"
+            value={editor.outputFolder ? 'Ready' : 'Default'}
+            tone={editor.outputFolder ? 'success' : 'neutral'}
+          />
+          <StatCard compact label="Done" value={editor.progress.completedImages} />
+        </div>
+      </ToolbarRow>
 
-      <ImageEditingPanel editor={editor} />
+      {editor.error ? (
+        <div className="shrink-0 px-3 pt-3 lg:px-4">
+          <AlertBanner title="Image editing needs attention">{editor.error}</AlertBanner>
+        </div>
+      ) : null}
 
-      <WorkflowProgressCard
-        icon="image"
-        title="Image editing progress"
-        description="Live status for preview rendering and folder output"
-        status={editor.progress.status}
-        statusLabel={imageEditStatusLabel(editor.progress.status)}
-        progressPercent={editor.progress.progressPercent}
-        currentFile={editor.progress.currentFile}
-        currentStep={
-          editor.progress.jobKind === 'preview'
-            ? 'Rendering live preview'
-            : editor.progress.jobKind === 'batch'
-              ? 'Applying image edits'
-              : null
-        }
-        completed={editor.progress.completedImages}
-        total={editor.progress.totalImages}
-        failed={editor.progress.failedImages}
-        active={editor.isEditing}
-        elapsedMs={editor.progress.elapsedMs}
-        message={editor.progress.message}
-      />
-    </div>
+      {editor.folder ? (
+        <div className="shrink-0 border-b border-surface-border px-3 py-2 lg:px-4">
+          <p className="truncate font-mono text-[11px] text-slate-500" title={editor.folder}>
+            {editor.folder}
+          </p>
+        </div>
+      ) : null}
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
+        <div className="min-h-0 overflow-y-auto border-b border-surface-border p-3 lg:border-b-0 lg:border-r lg:p-4">
+          <ImageEditingPanel editor={editor} />
+        </div>
+        <div className="flex min-h-0 flex-col overflow-hidden bg-surface/40 p-3 lg:p-4">
+          <ImageEditPreview editor={editor} />
+        </div>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-surface-border bg-surface-raised/60 px-3 py-2 lg:px-4">
+        <div className="flex items-center gap-2">
+          <Icon name="image" size={14} className="text-sky-300" />
+          <StatusDot
+            tone={
+              active
+                ? 'active'
+                : finished
+                  ? 'success'
+                  : editor.progress.failedImages > 0
+                    ? 'danger'
+                    : 'neutral'
+            }
+          />
+          <span className="text-xs font-medium text-slate-300">
+            {imageEditStatusLabel(editor.progress.status)}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <ProgressBar
+            value={editor.progress.progressPercent}
+            tone={editor.progress.failedImages > 0 ? 'warning' : finished ? 'success' : 'accent'}
+          />
+        </div>
+        <span className="font-mono text-xs tabular-nums text-slate-400">
+          {Math.round(editor.progress.progressPercent)}%
+        </span>
+        <span className="hidden text-xs text-slate-500 sm:inline">
+          {editor.progress.completedImages}/{editor.progress.totalImages || '—'}
+        </span>
+      </div>
+    </EditorChrome>
   );
 }
 

@@ -10,7 +10,6 @@ interface NavItem {
   label: string;
   icon: IconName;
   badge?: string;
-  active?: boolean;
 }
 
 interface SidebarProps {
@@ -40,8 +39,11 @@ export function Sidebar({
   ];
 
   return (
-    <nav className="flex h-full w-[68px] flex-col border-r border-surface-border bg-surface-raised/65 lg:w-[208px]" aria-label="Main navigation">
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-surface-border px-3 lg:px-4">
+    <nav
+      className="flex h-full w-[64px] flex-col border-r border-surface-border bg-surface-raised/80 lg:w-[220px]"
+      aria-label="Main navigation"
+    >
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-surface-border px-2.5 lg:px-4">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-accent/30 bg-accent/10 text-accent">
           <Icon name="spark" size={17} />
         </div>
@@ -51,8 +53,8 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
-        <p className="hidden px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600 lg:block">
+      <div className="flex-1 space-y-0.5 overflow-y-auto px-1.5 py-3 lg:px-2">
+        <p className="hidden px-2.5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600 lg:block">
           Workspace
         </p>
         {items.map((item) => {
@@ -73,7 +75,11 @@ export function Sidebar({
                   : 'text-slate-400 hover:bg-surface-hover hover:text-slate-100',
               )}
             >
-              <Icon name={item.icon} size={17} className={selected ? 'text-sky-300' : 'text-slate-500 group-hover:text-slate-300'} />
+              <Icon
+                name={item.icon}
+                size={17}
+                className={selected ? 'text-sky-300' : 'text-slate-500 group-hover:text-slate-300'}
+              />
               <span className="hidden min-w-0 flex-1 truncate lg:block">{item.label}</span>
               {item.badge ? (
                 <Badge tone={selected ? 'accent' : 'neutral'} className="hidden lg:inline-flex">
@@ -84,8 +90,8 @@ export function Sidebar({
           );
         })}
 
-        <div className="my-4 border-t border-surface-border" />
-        <p className="hidden px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600 lg:block">
+        <div className="my-3 border-t border-surface-border" />
+        <p className="hidden px-2.5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600 lg:block">
           Monitor
         </p>
         <button
@@ -102,7 +108,13 @@ export function Sidebar({
               : 'text-slate-400 hover:bg-surface-hover hover:text-slate-100',
           )}
         >
-          <Icon name="activity" size={17} className="text-slate-500 group-hover:text-slate-300" />
+          <Icon
+            name="activity"
+            size={17}
+            className={
+              activeView === 'activity' ? 'text-sky-300' : 'text-slate-500 group-hover:text-slate-300'
+            }
+          />
           <span className="hidden min-w-0 flex-1 truncate lg:block">Activity & Progress</span>
           {jobActive ? (
             <span className="hidden items-center gap-1.5 lg:flex">
@@ -114,10 +126,12 @@ export function Sidebar({
       </div>
 
       <div className="shrink-0 border-t border-surface-border p-2 lg:p-3">
-        <div className="flex items-center justify-center gap-2 rounded-md px-1 py-2 lg:justify-start lg:px-2">
+        <div className="flex items-center justify-center gap-2 rounded-md px-1 py-1.5 lg:justify-start lg:px-2">
           <StatusDot tone={jobActive ? 'active' : 'success'} />
           <div className="hidden min-w-0 lg:block">
-            <p className="truncate text-[11px] font-medium text-slate-300">{jobActive ? activeJobLabel : 'System ready'}</p>
+            <p className="truncate text-[11px] font-medium text-slate-300">
+              {jobActive ? activeJobLabel : 'System ready'}
+            </p>
             <p className="truncate text-[10px] text-slate-600" title={APP_DISPLAY_NAME}>
               Local processing
             </p>

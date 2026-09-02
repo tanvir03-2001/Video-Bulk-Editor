@@ -4,10 +4,10 @@
 
 :root {
   color-scheme: dark;
-  --app-surface: 18 20 26;
-  --app-surface-raised: 26 29 39;
-  --app-surface-border: 42 47 61;
-  --app-surface-hover: 32 37 50;
+  --app-surface: 15 17 23;
+  --app-surface-raised: 24 27 36;
+  --app-surface-border: 40 45 58;
+  --app-surface-hover: 30 34 46;
 }
 
 html,

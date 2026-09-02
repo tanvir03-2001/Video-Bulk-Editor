@@ -5,22 +5,20 @@ import {
   type BrandingAspectRatio,
   type BrandingCanvasConfig,
 } from '../../../shared/branding';
-import { Panel } from '../ui/ui';
+import { Field, Panel, RangeField, Select, TextInput } from '../ui/ui';
 
 interface CanvasSettingsProps {
   config: BrandingCanvasConfig;
   disabled: boolean;
   onChange: (patch: Partial<BrandingCanvasConfig>) => void;
+  bare?: boolean;
 }
 
-const inputBase =
-  'w-full rounded-md border border-surface-border bg-surface px-2.5 py-1.5 text-sm text-slate-100 outline-none transition focus:border-accent disabled:opacity-40';
-
-export function CanvasSettings({ config, disabled, onChange }: CanvasSettingsProps) {
+export function CanvasSettings({ config, disabled, onChange, bare = false }: CanvasSettingsProps) {
   const custom = config.aspectRatio === 'custom';
 
-  return (
-    <Panel className="space-y-3 bg-surface p-3.5">
+  const body = (
+    <>
       <div>
         <p className="text-sm font-semibold text-slate-100">Canvas & video</p>
         <p className="mt-0.5 text-xs text-slate-500">
@@ -28,32 +26,28 @@ export function CanvasSettings({ config, disabled, onChange }: CanvasSettingsPro
         </p>
       </div>
 
-      <div>
-        <label htmlFor="branding-aspect-ratio" className="text-xs font-medium text-slate-300">
-          Output aspect ratio
-        </label>
-        <select
+      <Field label="Output aspect ratio" htmlFor="branding-aspect-ratio">
+        <Select
           id="branding-aspect-ratio"
           value={config.aspectRatio}
           disabled={disabled}
           onChange={(event) => {
             onChange({ aspectRatio: event.target.value as BrandingAspectRatio });
           }}
-          className={`mt-1 ${inputBase}`}
         >
           {BRANDING_ASPECT_RATIOS.map((ratio) => (
             <option key={ratio} value={ratio}>
               {BRANDING_ASPECT_RATIO_LABELS[ratio]}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Field>
 
       {custom ? (
         <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs text-slate-500">
-            Width
-            <input
+          <Field label="Width" htmlFor="branding-custom-width">
+            <TextInput
+              id="branding-custom-width"
               type="number"
               min={BRANDING_LIMITS.customRatio.min}
               max={BRANDING_LIMITS.customRatio.max}
@@ -63,12 +57,11 @@ export function CanvasSettings({ config, disabled, onChange }: CanvasSettingsPro
               onChange={(event) => {
                 onChange({ customWidth: Number(event.target.value) });
               }}
-              className={`mt-1 ${inputBase}`}
             />
-          </label>
-          <label className="text-xs text-slate-500">
-            Height
-            <input
+          </Field>
+          <Field label="Height" htmlFor="branding-custom-height">
+            <TextInput
+              id="branding-custom-height"
               type="number"
               min={BRANDING_LIMITS.customRatio.min}
               max={BRANDING_LIMITS.customRatio.max}
@@ -78,38 +71,37 @@ export function CanvasSettings({ config, disabled, onChange }: CanvasSettingsPro
               onChange={(event) => {
                 onChange({ customHeight: Number(event.target.value) });
               }}
-              className={`mt-1 ${inputBase}`}
             />
-          </label>
+          </Field>
         </div>
       ) : null}
 
-      <div>
-        <div className="flex items-center justify-between gap-2">
-          <label htmlFor="branding-zoom" className="text-xs font-medium text-slate-300">
-            Video zoom
-          </label>
-          <span className="font-mono text-xs tabular-nums text-sky-300">{config.zoomPercent}%</span>
-        </div>
-        <input
-          id="branding-zoom"
-          type="range"
-          min={BRANDING_LIMITS.zoomPercent.min}
-          max={BRANDING_LIMITS.zoomPercent.max}
-          step={BRANDING_LIMITS.zoomPercent.step}
-          value={config.zoomPercent}
-          disabled={disabled}
-          onChange={(event) => {
-            onChange({ zoomPercent: Number(event.target.value) });
-          }}
-          className="mt-1 w-full accent-accent disabled:opacity-40"
-        />
-        <div className="mt-1 flex justify-between text-[10px] text-slate-600">
-          <span>50% · Zoom out</span>
-          <span>100% · Normal</span>
-          <span>200% · Zoom in</span>
-        </div>
-      </div>
-    </Panel>
+      <RangeField
+        id="branding-zoom"
+        label="Video zoom"
+        value={config.zoomPercent}
+        min={BRANDING_LIMITS.zoomPercent.min}
+        max={BRANDING_LIMITS.zoomPercent.max}
+        step={BRANDING_LIMITS.zoomPercent.step}
+        disabled={disabled}
+        onChange={(value) => {
+          onChange({ zoomPercent: value });
+        }}
+        formatValue={(value) => `${value}%`}
+        marks={
+          <div className="flex justify-between text-[10px] text-slate-600">
+            <span>50% · Zoom out</span>
+            <span>100% · Normal</span>
+            <span>200% · Zoom in</span>
+          </div>
+        }
+      />
+    </>
   );
+
+  if (bare) {
+    return <div className="space-y-3">{body}</div>;
+  }
+
+  return <Panel className="space-y-3 bg-surface p-3.5">{body}</Panel>;
 }

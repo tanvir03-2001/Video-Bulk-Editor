@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { AppShell } from './components/shell/AppShell';
-import { BrandingPreview } from './components/branding/BrandingPreview';
-import { ComposerPreview } from './components/composer/ComposerPreview';
 import { InspectorPanel } from './components/shell/InspectorPanel';
 import { Sidebar, type AppView } from './components/shell/Sidebar';
 import { StatusBar } from './components/shell/StatusBar';
@@ -17,7 +15,6 @@ import { ComposerWorkspace } from './components/workspaces/ComposerWorkspace';
 import { ClassificationWorkspace } from './components/workspaces/ClassificationWorkspace';
 import { FramesWorkspace } from './components/workspaces/FramesWorkspace';
 import { OverviewWorkspace } from './components/workspaces/OverviewWorkspace';
-import { ImageEditPreview } from './components/imageEditing/ImageEditPreview';
 import { ImageEditingWorkspace } from './components/workspaces/ImageEditingWorkspace';
 import type { ProcessingStatus } from './types/processing';
 import { formatEstimatedRemaining } from './utils/progress';
@@ -525,9 +522,15 @@ export default function App() {
     }
   };
 
+  const layoutMode =
+    activeView === 'branding' || activeView === 'composer' || activeView === 'image-editor'
+      ? 'editor'
+      : 'hub';
+
   return (
     <AppShell
       theme={theme}
+      layoutMode={layoutMode}
       sidebar={
         <Sidebar
           activeView={activeView}
@@ -565,66 +568,13 @@ export default function App() {
           classifyAllowPercent={imageClassification.allowPercent}
           onVideoAllowPercentChange={setAllowPercent}
           onClassifyAllowPercentChange={imageClassification.setAllowPercent}
-          brandingPreview={
-            <BrandingPreview
-              progress={branding.progress}
-              videos={branding.videos}
-              previewVideoPath={branding.previewVideoPath}
-              sourceVideoUrl={branding.sourceVideoUrl}
-              previewUrl={branding.previewUrl}
-              showInstantPreview={branding.showInstantPreview}
-              showEncodedPreview={branding.showEncodedPreview}
-              config={branding.config}
-              outputFolder={branding.outputFolder}
-              aspectRatio={branding.config.canvas.aspectRatio}
-              customWidth={branding.config.canvas.customWidth}
-              customHeight={branding.config.canvas.customHeight}
-              zoomPercent={branding.config.canvas.zoomPercent}
-              canPreview={branding.canPreview}
-              canApply={branding.canApply}
-              canCancel={branding.canCancel}
-              onPreviewVideoChange={branding.setPreviewVideoPath}
-              onGeneratePreview={() => {
-                void branding.generatePreview();
-              }}
-              onApplyToAll={() => {
-                void branding.applyToAll();
-              }}
-              onCancel={() => {
-                void branding.cancel();
-              }}
-              onSelectOutputFolder={() => {
-                void branding.selectOutputFolder();
-              }}
-              onResetOutputFolder={() => {
-                void branding.resetOutputFolder();
-              }}
-            />
-          }
-          imageEditPreview={<ImageEditPreview editor={imageEditing} />}
-          composerPreview={
-            <ComposerPreview
-              clips={composer.clips}
-              proxyPaths={composer.proxyPaths}
-              audioPath={composer.audioPath}
-              branding={composer.branding}
-              exportedPath={composer.exportedOutputPath}
-              previewWidth={composer.previewDimensions.width}
-              previewHeight={composer.previewDimensions.height}
-              durationSeconds={composer.previewDurationSeconds}
-              playheadSeconds={composer.playheadSeconds}
-              isPlaying={composer.isPreviewPlaying}
-              onPlayheadChange={composer.setPlayheadSeconds}
-              onPlayingChange={composer.setIsPreviewPlaying}
-              label={composer.exportedOutputPath ? 'Exported preview' : 'Live preview'}
-            />
-          }
           composerProgress={composer.progress}
           composerActivityMessage={composer.activityMessage}
           composerActivityLogs={composer.activityLogs}
           composerIsWorking={composer.isWorking}
           composerVideoCount={composer.videos.length}
           composerAudioReady={Boolean(composer.audioPath)}
+          composerVideoOnly={composer.composerMode === 'video-only'}
           composerOutputPath={composer.outputPath}
           composerBrandingConfig={composer.branding}
         />

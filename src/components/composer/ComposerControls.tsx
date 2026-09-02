@@ -1,12 +1,19 @@
-import { useState, type ReactNode } from 'react';
 import type { ComposerClip } from '../../../shared/composer';
 import type { BrandingConfig, BrandingSide, WatermarkConfig } from '../../../shared/branding';
 import { MovingTextSettings } from '../branding/MovingTextSettings';
 import { SideImagesSettings } from '../branding/SideImagesSettings';
+import { SubtitlesPositionControls } from '../branding/SubtitlesPositionControls';
 import { WatermarkSettings } from '../branding/WatermarkSettings';
 import { PresetPicker } from '../imageEditing/PresetPicker';
-import { Icon } from '../ui/Icon';
-import { Badge, Button, Panel } from '../ui/ui';
+import {
+  Badge,
+  Button,
+  CheckboxField,
+  CollapsibleSection,
+  Field,
+  Panel,
+  RangeField,
+} from '../ui/ui';
 
 interface ComposerControlsProps {
   selectedClip: ComposerClip | null;
@@ -26,47 +33,6 @@ interface ComposerControlsProps {
   onSelectOutputPath: () => void;
 }
 
-function SectionHeader({ icon, title }: { icon: Parameters<typeof Icon>[0]['name']; title: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <Icon name={icon} size={14} className="text-sky-400" />
-      <p className="text-xs font-medium text-slate-300">{title}</p>
-    </div>
-  );
-}
-
-function CollapsibleSection({
-  title,
-  icon,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string;
-  icon: Parameters<typeof Icon>[0]['name'];
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-2 rounded-lg border border-surface-border bg-surface p-3.5">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 text-left"
-        onClick={onToggle}
-      >
-        <SectionHeader icon={icon} title={title} />
-        <Icon
-          name="chevron-down"
-          size={14}
-          className={`text-slate-500 transition ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open ? children : null}
-    </div>
-  );
-}
-
 export function ComposerControls({
   selectedClip,
   branding,
@@ -84,145 +50,109 @@ export function ComposerControls({
   onSelectSideImage,
   onSelectOutputPath,
 }: ComposerControlsProps) {
-  const [watermarkOpen, setWatermarkOpen] = useState(true);
-  const [sideImagesOpen, setSideImagesOpen] = useState(false);
-  const [movingTextOpen, setMovingTextOpen] = useState(false);
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="accent">1080p HD export</Badge>
+        <Badge tone="accent">1080p HD</Badge>
         <Badge tone="neutral">Fade transitions</Badge>
-        <span className="text-xs text-slate-500">Live branding preview in inspector</span>
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Panel className="space-y-3 bg-surface p-3.5">
-          <SectionHeader icon="play" title="Clip Audio" />
-          {selectedClip ? (
-            <div className="space-y-3">
-              <p className="truncate text-sm text-slate-200">{selectedClip.sourceName}</p>
-              <label className="flex items-center gap-2 text-sm text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={selectedClip.muted}
-                  disabled={disabled}
-                  onChange={(event) => {
-                    onUpdateClip(selectedClip.id, { muted: event.target.checked });
-                  }}
-                />
-                Mute original audio
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs text-slate-400">
-                  Volume ({selectedClip.volumePercent}%)
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={selectedClip.volumePercent}
-                  disabled={disabled || selectedClip.muted}
-                  onChange={(event) => {
-                    onUpdateClip(selectedClip.id, {
-                      volumePercent: Number(event.target.value),
-                    });
-                  }}
-                  className="w-full"
-                />
-              </label>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500">Select a clip on the timeline to adjust volume.</p>
-          )}
-        </Panel>
 
-        <Panel className="space-y-3 bg-surface p-3.5">
-          <SectionHeader icon="folder" title="Output" />
+      <Panel className="space-y-3 bg-surface p-3.5">
+        <p className="text-xs font-semibold text-slate-200">Clip audio</p>
+        {selectedClip ? (
+          <div className="space-y-3">
+            <p className="truncate text-sm text-slate-200">{selectedClip.sourceName}</p>
+            <CheckboxField
+              label="Mute original audio"
+              checked={selectedClip.muted}
+              disabled={disabled}
+              onChange={(muted) => {
+                onUpdateClip(selectedClip.id, { muted });
+              }}
+            />
+            <RangeField
+              label="Volume"
+              value={selectedClip.volumePercent}
+              min={0}
+              max={100}
+              step={1}
+              disabled={disabled || selectedClip.muted}
+              onChange={(volumePercent) => {
+                onUpdateClip(selectedClip.id, { volumePercent });
+              }}
+              formatValue={(value) => `${value}%`}
+            />
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">Select a clip on the timeline to adjust volume.</p>
+        )}
+      </Panel>
+
+      <Panel className="space-y-3 bg-surface p-3.5">
+        <p className="text-xs font-semibold text-slate-200">Output</p>
+        <Field label="Export path">
           <p className="truncate font-mono text-xs text-slate-400" title={outputPath ?? undefined}>
             {outputPath ?? 'Default videos folder'}
           </p>
+        </Field>
+        <Field label="Soundtrack">
           <p className="truncate font-mono text-xs text-slate-500" title={audioPath ?? undefined}>
-            Audio: {audioPath ? audioPath.split(/[\\/]/).pop() : 'Not selected'}
+            {audioPath ? audioPath.split(/[\\/]/).pop() : 'Not selected'}
           </p>
-          <Button variant="secondary" size="sm" icon="folder" onClick={onSelectOutputPath} disabled={disabled}>
-            Change Output
-          </Button>
-        </Panel>
+        </Field>
+        <Button variant="secondary" size="sm" icon="folder" onClick={onSelectOutputPath} disabled={disabled}>
+          Change Output
+        </Button>
+      </Panel>
 
-        <div className="lg:col-span-2 space-y-3">
-          <CollapsibleSection
-            title="Watermark"
-            icon="spark"
-            open={watermarkOpen}
-            onToggle={() => {
-              setWatermarkOpen((open) => !open);
-            }}
-          >
-            <WatermarkSettings
-              config={branding.watermark}
-              disabled={disabled}
-              onChange={onUpdateWatermark}
-              onTextChange={onUpdateWatermarkText}
-              onSelectLogo={onSelectLogoImage}
-            />
-          </CollapsibleSection>
+      <CollapsibleSection title="Watermark" description="Logo or text overlay" defaultOpen>
+        <WatermarkSettings
+          bare
+          config={branding.watermark}
+          disabled={disabled}
+          onChange={onUpdateWatermark}
+          onTextChange={onUpdateWatermarkText}
+          onSelectLogo={onSelectLogoImage}
+        />
+      </CollapsibleSection>
 
-          <CollapsibleSection
-            title="Side images"
-            icon="image"
-            open={sideImagesOpen}
-            onToggle={() => {
-              setSideImagesOpen((open) => !open);
-            }}
-          >
-            <SideImagesSettings
-              config={branding.canvas}
-              disabled={disabled}
-              onChange={onUpdateSideImage}
-              onSelectImage={onSelectSideImage}
-            />
-          </CollapsibleSection>
+      <CollapsibleSection title="Side images" description="Image bands around the frame">
+        <SideImagesSettings
+          bare
+          config={branding.canvas}
+          disabled={disabled}
+          onChange={onUpdateSideImage}
+          onSelectImage={onSelectSideImage}
+        />
+      </CollapsibleSection>
 
-          <CollapsibleSection
-            title="Moving Text"
-            icon="logo"
-            open={movingTextOpen}
-            onToggle={() => {
-              setMovingTextOpen((open) => !open);
-            }}
-          >
-            <MovingTextSettings
-              config={branding.movingText}
-              disabled={disabled}
-              onChange={onUpdateMovingText}
-            />
-          </CollapsibleSection>
+      <CollapsibleSection title="Moving text" description="Animated text overlay">
+        <MovingTextSettings
+          bare
+          config={branding.movingText}
+          disabled={disabled}
+          onChange={onUpdateMovingText}
+        />
+      </CollapsibleSection>
 
-          <PresetPicker
-            value={branding.imagePreset}
-            disabled={disabled}
-            onChange={onUpdateImagePreset}
-          />
+      <PresetPicker value={branding.imagePreset} disabled={disabled} onChange={onUpdateImagePreset} />
 
-          <Panel className="space-y-2 bg-surface p-3.5">
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input
-                type="checkbox"
-                checked={branding.subtitles.enabled}
-                disabled={disabled}
-                onChange={(event) => {
-                  onUpdateSubtitles({ enabled: event.target.checked });
-                }}
-              />
-              English reels subtitles (Local Whisper)
-            </label>
-            <p className="text-[11px] leading-relaxed text-slate-500">
-              Uses the soundtrack when selected; otherwise speech from the combined video audio.
-            </p>
-          </Panel>
-        </div>
-      </div>
+      <Panel className="space-y-2.5 bg-surface p-3.5">
+        <CheckboxField
+          label="English reels subtitles (Local Whisper)"
+          checked={branding.subtitles.enabled}
+          disabled={disabled}
+          onChange={(enabled) => {
+            onUpdateSubtitles({ enabled });
+          }}
+          hint="Uses the soundtrack when selected; otherwise speech from the combined video audio."
+        />
+        <SubtitlesPositionControls
+          value={branding.subtitles}
+          disabled={disabled}
+          onChange={onUpdateSubtitles}
+        />
+      </Panel>
     </div>
   );
 }

@@ -34,10 +34,10 @@ export function TopToolbar({
   onToggleTheme,
 }: TopToolbarProps) {
   return (
-    <div className="flex min-h-14 items-center justify-between gap-3 border-b border-surface-border bg-surface/95 px-4 lg:px-5">
+    <div className="flex min-h-12 items-center justify-between gap-3 border-b border-surface-border bg-surface/95 px-3 lg:px-4">
       <div className="flex min-w-0 items-center gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+          <p className="truncate text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">
             {APP_DISPLAY_NAME}
           </p>
           <h1 className="truncate text-sm font-semibold text-white">{viewTitles[view]}</h1>

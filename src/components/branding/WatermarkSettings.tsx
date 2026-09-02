@@ -8,7 +8,8 @@ import {
   type OverlayPosition,
   type WatermarkConfig,
 } from '../../../shared/branding';
-import { Button, Panel } from '../ui/ui';
+import { Button, CheckboxField, Field, Panel, RangeField, Select, TextInput } from '../ui/ui';
+import { cx } from '../ui/cx';
 
 interface WatermarkSettingsProps {
   config: WatermarkConfig;
@@ -16,11 +17,8 @@ interface WatermarkSettingsProps {
   onChange: (patch: Partial<WatermarkConfig>) => void;
   onTextChange: (patch: Partial<WatermarkConfig['text']>) => void;
   onSelectLogo: () => void;
+  bare?: boolean;
 }
-
-const fieldLabel = 'text-xs font-medium text-slate-300';
-const inputBase =
-  'w-full rounded-md border border-surface-border bg-surface px-2.5 py-1.5 text-sm text-slate-100 outline-none transition focus:border-accent disabled:opacity-40';
 
 const positionTitles: Record<OverlayPosition, string> = {
   'top-left': 'Top left',
@@ -34,66 +32,18 @@ const positionTitles: Record<OverlayPosition, string> = {
   'bottom-right': 'Bottom right',
 };
 
-function Slider({
-  id,
-  label,
-  value,
-  min,
-  max,
-  step,
-  disabled,
-  suffix,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  disabled: boolean;
-  suffix: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        <label htmlFor={id} className={fieldLabel}>
-          {label}
-        </label>
-        <span className="font-mono text-xs tabular-nums text-white">
-          {value}
-          {suffix}
-        </span>
-      </div>
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => {
-          onChange(Number(event.target.value));
-        }}
-        className="mt-1 w-full accent-accent disabled:opacity-40"
-      />
-    </div>
-  );
-}
-
 export function WatermarkSettings({
   config,
   disabled,
   onChange,
   onTextChange,
   onSelectLogo,
+  bare = false,
 }: WatermarkSettingsProps) {
   const controlsDisabled = disabled || !config.enabled;
 
-  return (
-    <Panel className="space-y-3 bg-surface p-3.5">
+  const body = (
+    <>
       <label className="flex items-center gap-2 text-sm font-medium text-slate-100">
         <input
           type="checkbox"
@@ -131,14 +81,8 @@ export function WatermarkSettings({
       </div>
 
       {config.mode === 'image' ? (
-        <div className="space-y-1.5">
-          <Button
-            size="sm"
-            variant="secondary"
-            icon="image"
-            onClick={onSelectLogo}
-            disabled={controlsDisabled}
-          >
+        <div className="space-y-2">
+          <Button size="sm" variant="secondary" icon="image" onClick={onSelectLogo} disabled={controlsDisabled}>
             Choose Logo Image
           </Button>
           <p
@@ -147,7 +91,7 @@ export function WatermarkSettings({
           >
             {config.imagePath ?? 'No logo selected (PNG with transparency works best)'}
           </p>
-          <Slider
+          <RangeField
             id="wm-scale"
             label="Logo Size"
             value={config.scalePercent}
@@ -155,44 +99,40 @@ export function WatermarkSettings({
             max={BRANDING_LIMITS.watermarkScalePercent.max}
             step={BRANDING_LIMITS.watermarkScalePercent.step}
             disabled={controlsDisabled}
-            suffix="% width"
             onChange={(value) => {
               onChange({ scalePercent: value });
             }}
+            formatValue={(value) => `${value}%`}
           />
         </div>
       ) : (
         <div className="space-y-2">
-          <label htmlFor="wm-primary-text" className={fieldLabel}>
-            Primary text
-          </label>
-          <input
-            id="wm-primary-text"
-            type="text"
-            value={config.text.text}
-            disabled={controlsDisabled}
-            maxLength={120}
-            placeholder="Smooth"
-            onChange={(event) => {
-              onTextChange({ text: event.target.value });
-            }}
-            className={inputBase}
-          />
-          <label htmlFor="wm-secondary-text" className={fieldLabel}>
-            Secondary text <span className="font-normal text-slate-500">(optional)</span>
-          </label>
-          <input
-            id="wm-secondary-text"
-            type="text"
-            value={config.text.secondaryText}
-            disabled={controlsDisabled}
-            maxLength={120}
-            placeholder="Radio"
-            onChange={(event) => {
-              onTextChange({ secondaryText: event.target.value });
-            }}
-            className={inputBase}
-          />
+          <Field label="Primary text" htmlFor="wm-primary-text">
+            <TextInput
+              id="wm-primary-text"
+              type="text"
+              value={config.text.text}
+              disabled={controlsDisabled}
+              maxLength={120}
+              placeholder="Smooth"
+              onChange={(event) => {
+                onTextChange({ text: event.target.value });
+              }}
+            />
+          </Field>
+          <Field label="Secondary text (optional)" htmlFor="wm-secondary-text">
+            <TextInput
+              id="wm-secondary-text"
+              type="text"
+              value={config.text.secondaryText}
+              disabled={controlsDisabled}
+              maxLength={120}
+              placeholder="Radio"
+              onChange={(event) => {
+                onTextChange({ secondaryText: event.target.value });
+              }}
+            />
+          </Field>
           <div
             className="rounded-md border border-surface-border bg-black/30 px-3 py-2.5 text-right"
             aria-label="Text logo preview"
@@ -207,40 +147,37 @@ export function WatermarkSettings({
             ) : null}
           </div>
           <p className="text-[11px] leading-relaxed text-slate-500">
-            The secondary line is rendered smaller and aligned to the right, like a broadcast
-            station lockup.
+            The secondary line is rendered smaller and aligned to the right, like a broadcast station lockup.
           </p>
           <div className="grid grid-cols-2 gap-2">
-            <select
+            <Select
               value={config.text.fontFamily}
               disabled={controlsDisabled}
               onChange={(event) => {
                 onTextChange({ fontFamily: event.target.value as BrandingFontFamily });
               }}
-              className={inputBase}
             >
               {BRANDING_FONT_FAMILIES.map((family) => (
                 <option key={family} value={family}>
                   {family === 'sans' ? 'Sans' : family === 'serif' ? 'Serif' : 'Mono'}
                 </option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={config.text.fontWeight}
               disabled={controlsDisabled}
               onChange={(event) => {
                 onTextChange({ fontWeight: event.target.value as BrandingFontWeight });
               }}
-              className={inputBase}
             >
               {BRANDING_FONT_WEIGHTS.map((weight) => (
                 <option key={weight} value={weight}>
                   {weight === 'regular' ? 'Regular' : weight === 'medium' ? 'Medium' : 'Bold'}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
-          <Slider
+          <RangeField
             id="wm-font-size"
             label="Text Size"
             value={config.text.fontSizePercent}
@@ -248,13 +185,13 @@ export function WatermarkSettings({
             max={BRANDING_LIMITS.textFontSizePercent.max}
             step={BRANDING_LIMITS.textFontSizePercent.step}
             disabled={controlsDisabled}
-            suffix="% height"
             onChange={(value) => {
               onTextChange({ fontSizePercent: value });
             }}
+            formatValue={(value) => `${value}%`}
           />
           <div className="flex items-center justify-between gap-2">
-            <label htmlFor="wm-color" className={fieldLabel}>
+            <label htmlFor="wm-color" className="text-xs font-medium text-slate-300">
               Text Colour
             </label>
             <input
@@ -268,23 +205,19 @@ export function WatermarkSettings({
               className="h-7 w-14 cursor-pointer rounded border border-surface-border bg-surface disabled:opacity-40"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={config.text.shadow}
-              disabled={controlsDisabled}
-              onChange={(event) => {
-                onTextChange({ shadow: event.target.checked });
-              }}
-              className="h-4 w-4 accent-accent disabled:opacity-40"
-            />
-            Shadow / outline
-          </label>
+          <CheckboxField
+            label="Shadow / outline"
+            checked={config.text.shadow}
+            disabled={controlsDisabled}
+            onChange={(shadow) => {
+              onTextChange({ shadow });
+            }}
+          />
         </div>
       )}
 
       <div>
-        <p className={fieldLabel}>Position</p>
+        <p className="text-xs font-medium text-slate-300">Position</p>
         <div className="mt-1 grid w-fit grid-cols-3 gap-1">
           {OVERLAY_POSITIONS.map((position) => (
             <button
@@ -296,17 +229,18 @@ export function WatermarkSettings({
               onClick={() => {
                 onChange({ position });
               }}
-              className={`h-6 w-8 rounded border transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={cx(
+                'h-6 w-8 rounded border transition disabled:cursor-not-allowed disabled:opacity-40',
                 config.position === position
                   ? 'border-accent bg-accent'
-                  : 'border-surface-border bg-surface-raised hover:border-accent-muted'
-              }`}
+                  : 'border-surface-border bg-surface-raised hover:border-accent-muted',
+              )}
             />
           ))}
         </div>
       </div>
 
-      <Slider
+      <RangeField
         id="wm-opacity"
         label="Opacity"
         value={config.opacityPercent}
@@ -314,13 +248,13 @@ export function WatermarkSettings({
         max={BRANDING_LIMITS.watermarkOpacityPercent.max}
         step={BRANDING_LIMITS.watermarkOpacityPercent.step}
         disabled={controlsDisabled}
-        suffix="%"
         onChange={(value) => {
           onChange({ opacityPercent: value });
         }}
+        formatValue={(value) => `${value}%`}
       />
 
-      <Slider
+      <RangeField
         id="wm-margin"
         label="Edge Margin"
         value={config.marginPercent}
@@ -328,11 +262,17 @@ export function WatermarkSettings({
         max={BRANDING_LIMITS.watermarkMarginPercent.max}
         step={BRANDING_LIMITS.watermarkMarginPercent.step}
         disabled={controlsDisabled}
-        suffix="%"
         onChange={(value) => {
           onChange({ marginPercent: value });
         }}
+        formatValue={(value) => `${value}%`}
       />
-    </Panel>
+    </>
   );
+
+  if (bare) {
+    return <div className="space-y-3">{body}</div>;
+  }
+
+  return <Panel className="space-y-3 bg-surface p-3.5">{body}</Panel>;
 }

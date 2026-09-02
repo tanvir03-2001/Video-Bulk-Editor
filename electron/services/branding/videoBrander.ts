@@ -602,6 +602,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
         onStatus: (message) => onStep?.(message),
         shouldCancel,
         registerChild,
+        position: config.subtitles,
       });
       if (assPath) {
         onStep?.('Burning subtitles');
@@ -721,6 +722,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
           onStatus: (message) => onStep?.(message),
           shouldCancel,
           registerChild,
+          position: config.subtitles,
         });
         if (assPath) {
           onStep?.('Burning subtitles');

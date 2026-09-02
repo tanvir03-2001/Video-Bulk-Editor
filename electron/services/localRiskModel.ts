@@ -7,6 +7,7 @@ import {
   SAFE_CONTRAST_LABEL,
   type ThresholdKey,
 } from './classificationConfig';
+import { classifyImageInWorker, disposeClipWorker } from './clipClient';
 
 export interface DetectionResult {
   category: string;
@@ -19,15 +20,6 @@ export interface ModelClassificationResult {
   reasons: string[];
 }
 
-type ZeroShotOutput = Array<{ label: string; score: number }>;
-
-type ZeroShotPipeline = (
-  image: string,
-  labels: string[],
-  options?: { hypothesis_template?: string },
-) => Promise<ZeroShotOutput>;
-
-let pipelinePromise: Promise<ZeroShotPipeline> | null = null;
 let configuredCacheDir: string | null = null;
 
 /**
@@ -46,38 +38,6 @@ export function getModelCacheDir(): string | null {
   return getClassificationConfig().modelCacheDir || configuredCacheDir;
 }
 
-async function loadPipeline(): Promise<ZeroShotPipeline> {
-  const config = getClassificationConfig();
-  const cacheDir = getModelCacheDir();
-
-  // Dynamic import keeps esbuild from trying to bundle the heavy package.
-  const transformers = await import('@xenova/transformers');
-
-  if (cacheDir) {
-    transformers.env.cacheDir = cacheDir;
-  }
-  // Prefer local cache after first download; allow offline reuse.
-  transformers.env.allowLocalModels = true;
-
-  console.log(`[Image Classifier] Loading model: ${config.modelId}`);
-  const classifier = (await transformers.pipeline(
-    'zero-shot-image-classification',
-    config.modelId,
-  )) as ZeroShotPipeline;
-  console.log('[Image Classifier] Model loaded');
-  return classifier;
-}
-
-function getPipeline(): Promise<ZeroShotPipeline> {
-  if (!pipelinePromise) {
-    pipelinePromise = loadPipeline().catch((error) => {
-      pipelinePromise = null;
-      throw error;
-    });
-  }
-  return pipelinePromise;
-}
-
 /**
  * Run local CLIP zero-shot classification on a single image path.
  * Returns real model scores only — never fabricated confidences.
@@ -87,10 +47,14 @@ export async function classifyImageWithModel(
 ): Promise<ModelClassificationResult> {
   const config = getClassificationConfig();
   const allowPercent = getRuntimeAllowPercent();
-  const classifier = await getPipeline();
   const labels = getCandidateLabels();
 
-  const outputs = await classifier(imagePath, labels);
+  const outputs = await classifyImageInWorker({
+    imagePath,
+    labels,
+    modelId: config.modelId,
+    cacheDir: getModelCacheDir(),
+  });
 
   const scores: Record<string, number> = {};
   for (const item of outputs) {
@@ -152,6 +116,8 @@ export async function classifyImageWithModel(
 
 /** Reset cached pipeline (useful for tests / reconfiguration). */
 export function resetRiskModelForTests(): void {
-  pipelinePromise = null;
   configuredCacheDir = null;
+  disposeClipWorker();
 }
+
+export { disposeClipWorker };

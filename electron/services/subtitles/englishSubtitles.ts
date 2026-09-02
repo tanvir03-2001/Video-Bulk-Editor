@@ -2,6 +2,12 @@ import type { ChildProcess } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {
+  BRANDING_LIMITS,
+  DEFAULT_BRANDING_SUBTITLES,
+  SUBTITLE_PLAY_RES,
+  type BrandingSubtitlesConfig,
+} from '../../../shared/branding';
 import { getFfmpegPath, toFfmpegPath } from '../ffmpegPaths';
 import { ProcessingCancelledError } from '../frameGenerator';
 import { runFfmpegProcess } from '../branding/ffmpegProcess';
@@ -181,15 +187,39 @@ function escapeAssText(text: string): string {
   return text.replace(/[{}\\]/g, '');
 }
 
+export function resolveSubtitlePlayPosition(position?: Partial<BrandingSubtitlesConfig>): {
+  x: number;
+  y: number;
+} {
+  const limits = BRANDING_LIMITS.subtitlePositionPercent;
+  const xPercent = Number.isFinite(position?.xPercent)
+    ? Math.min(limits.max, Math.max(limits.min, Number(position?.xPercent)))
+    : DEFAULT_BRANDING_SUBTITLES.xPercent;
+  const yPercent = Number.isFinite(position?.yPercent)
+    ? Math.min(limits.max, Math.max(limits.min, Number(position?.yPercent)))
+    : DEFAULT_BRANDING_SUBTITLES.yPercent;
+  return {
+    x: Math.round((SUBTITLE_PLAY_RES.x * xPercent) / 100),
+    y: Math.round((SUBTITLE_PLAY_RES.y * yPercent) / 100),
+  };
+}
+
 /**
  * Modern Reels-style ASS: large center captions, active word highlighted.
  * Highlight windows snap to the next word start so endings stay tight.
+ * Position uses {\pos(x,y)} so callers can move captions without changing timing.
  */
-export function buildReelsAss(cues: SubtitleCue[]): string {
+export function buildReelsAss(
+  cues: SubtitleCue[],
+  position?: Partial<BrandingSubtitlesConfig>,
+): string {
+  const { x: posX, y: posY } = resolveSubtitlePlayPosition(position);
+  const posTag = `{\\pos(${posX},${posY})}`;
+
   const header = `[Script Info]
 ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
+PlayResX: ${SUBTITLE_PLAY_RES.x}
+PlayResY: ${SUBTITLE_PLAY_RES.y}
 WrapStyle: 0
 ScaledBorderAndShadow: yes
 
@@ -230,7 +260,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             ? Math.max(word.startSeconds + MIN_WORD_HOLD_SECONDS, nextWord.startSeconds)
             : Math.min(word.endSeconds, word.startSeconds + MAX_WORD_HOLD_SECONDS);
           const end = Math.max(word.startSeconds + MIN_WORD_HOLD_SECONDS, highlightEnd);
-          return `Dialogue: 0,${formatAssTime(word.startSeconds)},${formatAssTime(end)},Reels,,0,0,0,,${rendered}`;
+          return `Dialogue: 0,${formatAssTime(word.startSeconds)},${formatAssTime(end)},Reels,,0,0,0,,${posTag}${rendered}`;
         })
         .join('\n'),
     )
@@ -287,6 +317,8 @@ export async function generateEnglishSubtitlesAss(options: {
   registerChild?: (child: ChildProcess | null) => void;
   /** Shift all cue times forward (e.g. soundtrack adelay on combiner timeline). */
   timelineOffsetSeconds?: number;
+  /** Caption placement; defaults match legacy bottom-center MarginV 220. */
+  position?: Partial<BrandingSubtitlesConfig>;
 }): Promise<string | null> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vfg-subs-'));
   const wavPath = path.join(tempDir, 'audio.wav');
@@ -328,7 +360,7 @@ export async function generateEnglishSubtitlesAss(options: {
         : cues;
 
     options.onStatus?.('Building reels captions');
-    const ass = buildReelsAss(shiftedCues);
+    const ass = buildReelsAss(shiftedCues, options.position);
     await fs.writeFile(assPath, ass, 'utf8');
 
     // Keep ASS outside the temp cleanup by copying to a sibling that caller owns.

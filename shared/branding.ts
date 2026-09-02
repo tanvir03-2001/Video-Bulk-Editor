@@ -192,6 +192,13 @@ export interface BrandingImagePresetConfig {
 
 export interface BrandingSubtitlesConfig {
   enabled: boolean;
+  /** 0 = left edge … 50 = center … 100 = right. Default 50. */
+  xPercent: number;
+  /**
+   * 0 = top … 100 = bottom.
+   * Default maps legacy ASS MarginV 220 on PlayResY 1920 → (1920-220)/1920*100.
+   */
+  yPercent: number;
 }
 
 export interface BrandingConfig {
@@ -202,6 +209,13 @@ export interface BrandingConfig {
   subtitles: BrandingSubtitlesConfig;
 }
 
+/** PlayRes used by reels ASS burn-in (must stay in sync with englishSubtitles). */
+export const SUBTITLE_PLAY_RES = { x: 1080, y: 1920 } as const;
+/** Legacy default MarginV from bottom before free positioning. */
+export const SUBTITLE_DEFAULT_MARGIN_V = 220;
+export const SUBTITLE_DEFAULT_Y_PERCENT =
+  ((SUBTITLE_PLAY_RES.y - SUBTITLE_DEFAULT_MARGIN_V) / SUBTITLE_PLAY_RES.y) * 100;
+
 export const BRANDING_LIMITS = {
   watermarkScalePercent: { min: 2, max: 60, step: 1 },
   watermarkOpacityPercent: { min: 5, max: 100, step: 1 },
@@ -211,6 +225,7 @@ export const BRANDING_LIMITS = {
   movingTextSizePercent: { min: 2, max: 20, step: 1 },
   customRatio: { min: 1, max: 10000, step: 1 },
   zoomPercent: { min: 50, max: 200, step: 5 },
+  subtitlePositionPercent: { min: 5, max: 95, step: 2 },
 } as const;
 
 export const DEFAULT_SIDE_IMAGE_CONFIG: SideImageConfig = {
@@ -275,6 +290,8 @@ export const DEFAULT_BRANDING_IMAGE_PRESET: BrandingImagePresetConfig = {
 
 export const DEFAULT_BRANDING_SUBTITLES: BrandingSubtitlesConfig = {
   enabled: false,
+  xPercent: 50,
+  yPercent: SUBTITLE_DEFAULT_Y_PERCENT,
 };
 
 export const DEFAULT_BRANDING_CONFIG: BrandingConfig = {

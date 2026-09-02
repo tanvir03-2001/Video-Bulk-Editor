@@ -2,10 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ImageEditPresetSummary } from '../../../shared/imageEditing';
 import { DEFAULT_IMAGE_EDIT_TUNING } from '../../../shared/imageEditing';
 import type { BrandingImagePresetConfig } from '../../../shared/branding';
-import { Badge, Button, Icon, Panel } from '../ui/ui';
+import { Badge, Button, controlBase, Icon, Panel } from '../ui/ui';
 
-const inputBase =
-  'w-full rounded-md border border-surface-border bg-surface px-2.5 py-1.5 text-sm text-slate-100 outline-none transition focus:border-accent disabled:opacity-40';
+const inputBase = controlBase;
 
 const FAVORITES_KEY = 'image-edit-favorite-presets';
 

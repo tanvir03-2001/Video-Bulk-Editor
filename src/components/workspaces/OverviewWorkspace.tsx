@@ -1,8 +1,9 @@
 import type { BrandingProgress } from '../../../shared/branding';
 import type { ImageClassificationProgress, ProcessingProgress, VideoFile } from '../../../shared/ipc';
 import type { ImageEditProgress } from '../../../shared/imageEditing';
-import { Badge, Button, Icon, Panel, SectionHeading, StatCard } from '../ui/ui';
+import { Badge, Button, Icon, Panel, SectionHeading, StatCard, WorkspacePage } from '../ui/ui';
 import type { AppView } from '../shell/Sidebar';
+import type { IconName } from '../ui/Icon';
 
 interface OverviewWorkspaceProps {
   processing: ProcessingProgress;
@@ -34,14 +35,14 @@ export function OverviewWorkspace({
           ? 'Video branding'
           : imageEditing.status === 'processing' || imageEditing.status === 'previewing'
             ? 'Image editing'
-          : null;
+            : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 p-5 lg:p-7">
+    <WorkspacePage>
       <SectionHeading
         eyebrow="Workspace overview"
         title="Make more from your media"
-        description="A focused local toolkit for extracting frames, sorting media, and preparing branded video."
+        description="A focused local toolkit for extracting frames, sorting media, branding, and combining video."
         action={
           <Badge tone={processing.ffmpegAvailable ? 'success' : 'danger'}>
             <Icon name={processing.ffmpegAvailable ? 'check' : 'alert'} size={12} />
@@ -71,10 +72,15 @@ export function OverviewWorkspace({
         <StatCard label="Videos scanned" value={videos.length} detail="Video → Frames" tone="accent" />
         <StatCard label="Images found" value={imageCount} detail="Classify Split" />
         <StatCard label="Classify videos" value={classificationVideoCount} detail="Available to review" />
-        <StatCard label="Frames generated" value={processing.imagesGenerated} detail="Current session" tone="success" />
+        <StatCard
+          label="Frames generated"
+          value={processing.imagesGenerated}
+          detail="Current session"
+          tone="success"
+        />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <WorkflowCard
           icon="frames"
           eyebrow="Extract"
@@ -88,7 +94,11 @@ export function OverviewWorkspace({
           eyebrow="Organize"
           title="Classify Split"
           description="Classify top-level images or videos locally into safe and flagged outputs."
-          count={imageCount || classificationVideoCount ? `${imageCount + classificationVideoCount} items ready` : 'No media scanned'}
+          count={
+            imageCount || classificationVideoCount
+              ? `${imageCount + classificationVideoCount} items ready`
+              : 'No media scanned'
+          }
           onClick={() => onNavigate('classify')}
         />
         <WorkflowCard
@@ -100,6 +110,14 @@ export function OverviewWorkspace({
           onClick={() => onNavigate('branding')}
         />
         <WorkflowCard
+          icon="video"
+          eyebrow="Combine"
+          title="Video Combiner"
+          description="Assemble clips on a timeline, mix audio, brand the result, and export 1080p HD."
+          count="Open the combiner workspace"
+          onClick={() => onNavigate('composer')}
+        />
+        <WorkflowCard
           icon="image"
           eyebrow="Edit"
           title="Image Editing"
@@ -107,26 +125,38 @@ export function OverviewWorkspace({
           count={imageCount ? `${imageCount} images ready` : 'No folder selected'}
           onClick={() => onNavigate('image-editor')}
         />
+        <WorkflowCard
+          icon="activity"
+          eyebrow="Monitor"
+          title="Activity & Progress"
+          description="Follow live jobs, inspect the current file, and review detailed event logs."
+          count="Open the activity monitor"
+          onClick={() => onNavigate('activity')}
+        />
       </div>
 
       <Panel className="p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Session activity</p>
-            <p className="mt-1 text-sm font-medium text-slate-200">Your workspace stays ready for the next task.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Session activity
+            </p>
+            <p className="mt-1 text-sm font-medium text-slate-200">
+              Your workspace stays ready for the next task.
+            </p>
           </div>
           <Button size="sm" variant="ghost" icon="activity" onClick={() => onNavigate('activity')}>
             Open activity
           </Button>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <ActivityRow label="Frame extraction" status={processing.status} />
           <ActivityRow label="Classification" status={classification.status} />
           <ActivityRow label="Branding" status={branding.status} />
           <ActivityRow label="Image editing" status={imageEditing.status} />
         </div>
       </Panel>
-    </div>
+    </WorkspacePage>
   );
 }
 
@@ -138,7 +168,7 @@ function WorkflowCard({
   count,
   onClick,
 }: {
-  icon: 'frames' | 'classify' | 'logo' | 'image';
+  icon: IconName;
   eyebrow: string;
   title: string;
   description: string;
@@ -155,9 +185,13 @@ function WorkflowCard({
         <div className="rounded-md border border-surface-border bg-surface p-2 text-sky-300">
           <Icon name={icon} size={18} />
         </div>
-        <Icon name="arrow-right" size={16} className="text-slate-600 transition-transform group-hover:translate-x-0.5 group-hover:text-sky-300" />
+        <Icon
+          name="arrow-right"
+          size={16}
+          className="text-slate-600 transition-transform group-hover:translate-x-0.5 group-hover:text-sky-300"
+        />
       </div>
-      <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">{eyebrow}</p>
+      <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">{eyebrow}</p>
       <h2 className="mt-1 text-base font-semibold text-white">{title}</h2>
       <p className="mt-2 min-h-10 text-sm leading-relaxed text-slate-400">{description}</p>
       <p className="mt-4 border-t border-surface-border pt-3 text-xs text-slate-500">{count}</p>
@@ -171,7 +205,9 @@ function ActivityRow({ label, status }: { label: string; status: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-surface-border bg-surface px-3 py-2">
       <div className="flex min-w-0 items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-sky-400' : completed ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-sky-400' : completed ? 'bg-emerald-400' : 'bg-slate-600'}`}
+        />
         <span className="truncate text-xs text-slate-300">{label}</span>
       </div>
       <span className="text-[11px] capitalize text-slate-500">{status.replace('_', ' ')}</span>

@@ -35,12 +35,11 @@ import {
 import { ClassificationRunner } from './services/classificationRunner';
 import { assertFfmpegAvailable } from './services/ffmpegPaths';
 import { scanImagesInFolder } from './services/imageScanner';
-import { configureModelCacheDir } from './services/localRiskModel';
+import { configureModelCacheDir, disposeClipWorker } from './services/localRiskModel';
 import { ProcessingQueue } from './services/processingQueue';
 import { scanVideosInFolder } from './services/videoScanner';
 import {
   disposeWhisperAsr,
-  warmupWhisperAsr,
 } from './services/subtitles/whisperAsrClient';
 import { probeMediaFile } from './services/mediaProbe';
 import { getVideoDurationSeconds } from './services/frameGenerator';
@@ -233,6 +232,7 @@ function broadcastProgress(): void {
     void composerRunner.dispose();
     void imageEditingRunner.dispose();
     void disposeWhisperAsr();
+    disposeClipWorker();
   });
 }
 
@@ -279,7 +279,12 @@ function registerIpcHandlers(): void {
     }
     assertNoJobRunning('processing');
 
-    void queue.start(request);
+    // Free Whisper worker memory before loading the CLIP classifier in-process.
+    await disposeWhisperAsr();
+
+    void queue.start(request).catch((error: unknown) => {
+      console.error('[processing] Unhandled queue failure:', error);
+    });
   });
 
   ipcMain.handle(IpcChannels.CANCEL_PROCESSING, () => {
@@ -316,7 +321,11 @@ function registerIpcHandlers(): void {
     }
     assertNoJobRunning('classification');
 
-    void classificationRunner.start(request);
+    await disposeWhisperAsr();
+
+    void classificationRunner.start(request).catch((error: unknown) => {
+      console.error('[classification] Unhandled runner failure:', error);
+    });
   });
 
   ipcMain.handle(IpcChannels.CANCEL_IMAGE_CLASSIFICATION, () => {
@@ -746,13 +755,6 @@ app.whenReady().then(() => {
   });
   broadcastProgress();
   createWindow();
-
-  // Idle warm-up: load Whisper in a worker so the first subtitle job skips cold start.
-  setTimeout(() => {
-    void warmupWhisperAsr().catch(() => {
-      // Best-effort; first subtitle job will load the model normally.
-    });
-  }, 4000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

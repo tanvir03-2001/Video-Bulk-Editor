@@ -1,67 +1,142 @@
-import { memo } from 'react';
-import { VideoBrandingPanel } from '../branding/VideoBrandingPanel';
 import type { VideoBrandingController } from '../../hooks/useVideoBranding';
-import { Panel, SectionHeading, StatCard } from '../ui/ui';
-import { WorkflowProgressCard } from '../ui/WorkflowProgressCard';
+import { BrandingPreview } from '../branding/BrandingPreview';
+import { VideoBrandingPanel } from '../branding/VideoBrandingPanel';
+import {
+  AlertBanner,
+  Badge,
+  EditorChrome,
+  Icon,
+  ProgressBar,
+  StatCard,
+  StatusDot,
+  ToolbarRow,
+} from '../ui/ui';
 
-export const BrandingWorkspace = memo(function BrandingWorkspace({
-  branding,
-}: {
-  branding: VideoBrandingController;
-}) {
+export function BrandingWorkspace({ branding }: { branding: VideoBrandingController }) {
+  const active =
+    branding.progress.status === 'processing' || branding.progress.status === 'previewing';
+  const finished = ['completed', 'preview_ready'].includes(branding.progress.status);
+
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 p-5 lg:p-7">
-      <SectionHeading
-        eyebrow="Production workspace"
-        title="Video Branding"
-        description="Compose a watermark or moving text, render a real preview, then apply the same setup to the folder."
-      />
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Source videos" value={branding.videos.length} detail={branding.folder ?? 'Select a folder'} tone="accent" />
-        <StatCard label="Output" value={branding.outputFolder ? 'Ready' : 'Not set'} detail="Originals stay untouched" tone={branding.outputFolder ? 'success' : 'neutral'} />
-        <StatCard label="Last run" value={branding.progress.completedVideos} detail={branding.progress.message ?? 'No batch rendered yet'} />
-      </div>
+    <EditorChrome>
+      <ToolbarRow className="justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">
+              Production
+            </p>
+            <h2 className="truncate text-sm font-semibold text-white">Video Branding</h2>
+          </div>
+          <Badge tone={branding.videos.length > 0 ? 'success' : 'neutral'}>
+            {branding.videos.length} video{branding.videos.length === 1 ? '' : 's'}
+          </Badge>
+          {!branding.configReady ? (
+            <Badge tone="warning">Enable an overlay to preview</Badge>
+          ) : null}
+        </div>
+        <div className="grid w-full max-w-xl grid-cols-3 gap-2 sm:w-auto">
+          <StatCard
+            compact
+            label="Source"
+            value={branding.videos.length}
+            detail={branding.folder ? 'Folder set' : 'Select folder'}
+            tone="accent"
+          />
+          <StatCard
+            compact
+            label="Output"
+            value={branding.outputFolder ? 'Ready' : 'Default'}
+            tone={branding.outputFolder ? 'success' : 'neutral'}
+          />
+          <StatCard compact label="Done" value={branding.progress.completedVideos} />
+        </div>
+      </ToolbarRow>
 
       {branding.error ? (
-        <Panel className="flex items-start gap-3 border-rose-500/30 bg-rose-950/20 p-4" role="alert">
-          <span className="mt-0.5 text-rose-300">!</span>
-          <div>
-            <p className="text-sm font-medium text-rose-100">Branding action needs attention</p>
-            <p className="mt-1 text-sm leading-relaxed text-rose-200/80">{branding.error}</p>
-          </div>
-        </Panel>
+        <div className="shrink-0 px-3 pt-3 lg:px-4">
+          <AlertBanner title="Branding action needs attention">{branding.error}</AlertBanner>
+        </div>
       ) : null}
 
-      <VideoBrandingPanel branding={branding} showPreview={false} />
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
+        <div className="min-h-0 overflow-y-auto border-b border-surface-border p-3 lg:border-b-0 lg:border-r lg:p-4">
+          <VideoBrandingPanel branding={branding} />
+        </div>
+        <div className="flex min-h-0 flex-col overflow-hidden bg-surface/40 p-3 lg:p-4">
+          <BrandingPreview
+            progress={branding.progress}
+            videos={branding.videos}
+            previewVideoPath={branding.previewVideoPath}
+            sourceVideoUrl={branding.sourceVideoUrl}
+            previewUrl={branding.previewUrl}
+            showInstantPreview={branding.showInstantPreview}
+            showEncodedPreview={branding.showEncodedPreview}
+            config={branding.config}
+            outputFolder={branding.outputFolder}
+            aspectRatio={branding.config.canvas.aspectRatio}
+            customWidth={branding.config.canvas.customWidth}
+            customHeight={branding.config.canvas.customHeight}
+            zoomPercent={branding.config.canvas.zoomPercent}
+            canPreview={branding.canPreview}
+            canApply={branding.canApply}
+            canCancel={branding.canCancel}
+            onPreviewVideoChange={branding.setPreviewVideoPath}
+            onGeneratePreview={() => {
+              void branding.generatePreview();
+            }}
+            onApplyToAll={() => {
+              void branding.applyToAll();
+            }}
+            onCancel={() => {
+              void branding.cancel();
+            }}
+            onSelectOutputFolder={() => {
+              void branding.selectOutputFolder();
+            }}
+            onResetOutputFolder={() => {
+              void branding.resetOutputFolder();
+            }}
+          />
+        </div>
+      </div>
 
-      <WorkflowProgressCard
-        icon="logo"
-        title="Branding progress"
-        description="Preview or batch encoding status for the selected source"
-        status={branding.progress.status}
-        statusLabel={brandingStatusLabel(branding.progress.status)}
-        progressPercent={branding.progress.progressPercent}
-        currentFile={branding.progress.currentFile}
-        currentStep={
-          branding.progress.currentStep
-          ?? (branding.progress.jobKind === 'preview'
-            ? 'Rendering live preview'
-            : branding.progress.jobKind === 'batch'
-              ? 'Applying branding'
-              : null)
-        }
-        completed={branding.progress.completedVideos}
-        total={branding.progress.totalVideos}
-        failed={branding.progress.failedVideos}
-        active={branding.isBranding}
-        elapsedMs={branding.progress.elapsedMs}
-        message={branding.progress.message}
-      />
-    </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-surface-border bg-surface-raised/60 px-3 py-2 lg:px-4">
+        <div className="flex items-center gap-2">
+          <Icon name="logo" size={14} className="text-sky-300" />
+          <StatusDot
+            tone={active ? 'active' : finished ? 'success' : branding.progress.failedVideos > 0 ? 'danger' : 'neutral'}
+          />
+          <span className="text-xs font-medium text-slate-300">
+            {brandingStatusLabel(branding.progress.status)}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <ProgressBar
+            value={branding.progress.progressPercent}
+            tone={branding.progress.failedVideos > 0 ? 'warning' : finished ? 'success' : 'accent'}
+          />
+        </div>
+        <span className="font-mono text-xs tabular-nums text-slate-400">
+          {Math.round(branding.progress.progressPercent)}%
+        </span>
+        <span className="hidden text-xs text-slate-500 sm:inline">
+          {branding.progress.completedVideos}/{branding.progress.totalVideos || '—'}
+        </span>
+        {branding.progress.currentFile ? (
+          <span
+            className="hidden max-w-[200px] truncate font-mono text-[11px] text-slate-500 xl:inline"
+            title={branding.progress.currentFile}
+          >
+            {branding.progress.currentFile}
+          </span>
+        ) : null}
+      </div>
+    </EditorChrome>
   );
-});
+}
 
 function brandingStatusLabel(status: string): string {
-  return status === 'no_videos' ? 'No videos' : status.replace('_', ' ').replace(/^\w/, (value) => value.toUpperCase());
+  return status === 'no_videos'
+    ? 'No videos'
+    : status.replace('_', ' ').replace(/^\w/, (value) => value.toUpperCase());
 }

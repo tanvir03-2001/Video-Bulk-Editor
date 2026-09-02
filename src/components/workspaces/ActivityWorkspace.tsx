@@ -2,7 +2,7 @@ import { LogPanel } from '../LogPanel';
 import { ProgressPanel } from '../ProgressPanel';
 import { StatsGrid } from '../StatsGrid';
 import { StatusPanel } from '../StatusPanel';
-import { Panel, SectionHeading } from '../ui/ui';
+import { Panel, SectionHeading, WorkspacePage } from '../ui/ui';
 
 interface ActivityWorkspaceProps {
   title: string;
@@ -42,7 +42,7 @@ export function ActivityWorkspace({
   logs,
 }: ActivityWorkspaceProps) {
   return (
-    <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col gap-5 p-5 lg:p-7">
+    <WorkspacePage maxWidth="1440" className="h-full">
       <SectionHeading eyebrow="Monitor" title={title} description={subtitle} />
       <Panel className="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:p-5">
         <StatsGrid cards={statsCards} />
@@ -65,6 +65,6 @@ export function ActivityWorkspace({
         />
         <LogPanel logs={logs} title={`${title} log`} compact={false} />
       </Panel>
-    </div>
+    </WorkspacePage>
   );
 }

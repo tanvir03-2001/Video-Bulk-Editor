@@ -10,6 +10,7 @@ interface SideImagesSettingsProps {
   disabled: boolean;
   onChange: (side: BrandingSide, patch: Partial<SideImageConfig>) => void;
   onSelectImage: (side: BrandingSide) => void;
+  bare?: boolean;
 }
 
 const sideLabels: Record<BrandingSide, string> = {
@@ -26,11 +27,12 @@ export function SideImagesSettings({
   disabled,
   onChange,
   onSelectImage,
+  bare = false,
 }: SideImagesSettingsProps) {
   const enabledCount = sideOrder.filter((side) => config[side].enabled).length;
 
-  return (
-    <Panel className="space-y-3 bg-surface p-3.5">
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-100">Side images</p>
@@ -61,8 +63,14 @@ export function SideImagesSettings({
         Top and bottom images scale to the canvas width. Left and right images scale to the video
         height; bands auto-fit to keep the video visible.
       </p>
-    </Panel>
+    </>
   );
+
+  if (bare) {
+    return <div className="space-y-3">{body}</div>;
+  }
+
+  return <Panel className="space-y-3 bg-surface p-3.5">{body}</Panel>;
 }
 
 function SideImageRow({

@@ -1,4 +1,4 @@
-import { Button, Panel } from './ui/ui';
+import { Button, Panel, RangeField } from './ui/ui';
 
 interface FolderControlsProps {
   selectedFolder: string | null;
@@ -33,29 +33,18 @@ export function FolderControls({
     <div className="space-y-2.5">
       {showThreshold ? (
         <Panel className="bg-surface p-3">
-        <div className="flex items-center justify-between gap-2">
-          <label htmlFor="video-allow-percent" className="text-xs font-medium text-slate-300">
-            Allow %
-          </label>
-          <span className="font-mono text-xs tabular-nums text-sky-300">{allowPercent}%</span>
-        </div>
-        <input
-          id="video-allow-percent"
-          type="range"
-          min={5}
-          max={90}
-          step={5}
-          value={allowPercent}
-          disabled={!canSelectFolder}
-          onChange={(event) => {
-            onAllowPercentChange(Number(event.target.value));
-          }}
-          className="mt-2 w-full accent-accent disabled:opacity-40"
-        />
-        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-          Scores above {allowPercent}% → flagged. At or below → safe. Per-video frame check with
-          up to 5 retries. Uses rounded whole percents.
-        </p>
+          <RangeField
+            id="video-allow-percent"
+            label="Allow %"
+            value={allowPercent}
+            min={5}
+            max={90}
+            step={5}
+            disabled={!canSelectFolder}
+            onChange={onAllowPercentChange}
+            formatValue={(value) => `${value}%`}
+            hint={`Scores above ${allowPercent}% → flagged. At or below → safe. Per-video frame check with up to 5 retries.`}
+          />
         </Panel>
       ) : null}
 

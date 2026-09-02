@@ -624,6 +624,7 @@ export async function composeVideo(options: ComposeVideoOptions): Promise<Compos
         onStatus: (message) => onPhase?.(message),
         shouldCancel,
         registerChild,
+        position: branding.subtitles,
       });
       if (assPath) {
         onPhase?.('Burning subtitles');
