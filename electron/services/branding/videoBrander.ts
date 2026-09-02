@@ -16,6 +16,13 @@ import {
 } from './filterGraph';
 import { runFfmpegProcess } from './ffmpegProcess';
 import { renderTextOverlayAsset } from './overlayAssets';
+import {
+  PREVIEW_MAX_LONG_EDGE,
+  EXPORT_MAX_LONG_EDGE,
+  EXPORT_PRESET,
+  EXPORT_CRF,
+  type BrandingEncodeProfile,
+} from './brandingConfig';
 
 export interface VideoInfo {
   width: number;
@@ -23,10 +30,13 @@ export interface VideoInfo {
   durationSeconds: number;
 }
 
+export type { BrandingEncodeProfile };
+
 export interface BrandVideoOptions {
   videoPath: string;
   outputPath: string;
   config: BrandingConfig;
+  encodeProfile?: BrandingEncodeProfile;
   /** When set, only this many seconds are rendered (preview mode). */
   previewDurationSeconds?: number;
   previewStartSeconds?: number;
@@ -53,6 +63,18 @@ interface EncoderAttempt {
 const HARDWARE_ENCODERS = ['h264_nvenc', 'h264_qsv', 'h264_amf'] as const;
 
 let hardwareEncoderPromise: Promise<string | null> | null = null;
+const failedHardwareEncoders = new Set<string>();
+
+export function isHardwareEncoderRuntimeError(message: string): boolean {
+  return /nvcuda|nvenc|amf|qsv|cannot load|no capable devices|does not support|operation not permitted/i.test(
+    message,
+  );
+}
+
+export function markHardwareEncoderFailed(encoder: string): void {
+  failedHardwareEncoders.add(encoder);
+  hardwareEncoderPromise = null;
+}
 
 function parseRotation(stream: Record<string, unknown>): number {
   const tags = stream.tags as Record<string, unknown> | undefined;
@@ -141,6 +163,39 @@ export async function probeVideoInfo(
   };
 }
 
+/** Returns true when the file has at least one audio stream. */
+export async function probeHasAudioStream(
+  videoPath: string,
+  shouldCancel?: () => boolean,
+  registerChild?: (child: ChildProcess | null) => void,
+): Promise<boolean> {
+  const ffprobe = getFfprobePath();
+  if (!ffprobe) {
+    return false;
+  }
+
+  try {
+    const { stdout } = await runFfmpegProcess(
+      ffprobe,
+      [
+        '-v',
+        'error',
+        '-select_streams',
+        'a',
+        '-show_entries',
+        'stream=index',
+        '-of',
+        'csv=p=0',
+        videoPath,
+      ],
+      { shouldCancel, registerChild },
+    );
+    return stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function probeHardwareEncoder(): Promise<string | null> {
   const ffmpeg = getFfmpegPath();
   if (!ffmpeg) {
@@ -150,7 +205,7 @@ async function probeHardwareEncoder(): Promise<string | null> {
   try {
     const { stdout } = await runFfmpegProcess(ffmpeg, ['-hide_banner', '-encoders']);
     for (const encoder of HARDWARE_ENCODERS) {
-      if (stdout.includes(encoder)) {
+      if (!failedHardwareEncoders.has(encoder) && stdout.includes(encoder)) {
         return encoder;
       }
     }
@@ -169,42 +224,74 @@ export function getHardwareEncoder(): Promise<string | null> {
   return hardwareEncoderPromise;
 }
 
-function buildVideoEncoderArgs(encoder: string): string[] {
+function buildVideoEncoderArgs(encoder: string, profile: BrandingEncodeProfile): string[] {
+  const isPreview = profile === 'preview';
   switch (encoder) {
     case 'h264_nvenc':
-      return ['-c:v', 'h264_nvenc', '-preset', 'p5', '-rc', 'vbr', '-cq', '20', '-b:v', '0'];
+      return [
+        '-c:v',
+        'h264_nvenc',
+        '-preset',
+        isPreview ? 'p1' : 'p5',
+        '-rc',
+        'vbr',
+        '-cq',
+        isPreview ? '28' : '20',
+        '-b:v',
+        '0',
+      ];
     case 'h264_qsv':
-      return ['-c:v', 'h264_qsv', '-global_quality', '22'];
+      return ['-c:v', 'h264_qsv', '-global_quality', isPreview ? '28' : '22'];
     case 'h264_amf':
-      return ['-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'cqp', '-qp_i', '22', '-qp_p', '24'];
+      return [
+        '-c:v',
+        'h264_amf',
+        '-quality',
+        isPreview ? 'speed' : 'balanced',
+        '-rc',
+        'cqp',
+        '-qp_i',
+        isPreview ? '28' : '22',
+        '-qp_p',
+        isPreview ? '30' : '24',
+      ];
     default:
-      return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18'];
+      return [
+        '-c:v',
+        'libx264',
+        '-preset',
+        isPreview ? 'ultrafast' : EXPORT_PRESET,
+        '-crf',
+        isPreview ? '28' : String(EXPORT_CRF),
+      ];
   }
 }
 
-async function buildEncoderAttempts(): Promise<EncoderAttempt[]> {
+async function buildEncoderAttempts(profile: BrandingEncodeProfile): Promise<EncoderAttempt[]> {
   const hardware = await getHardwareEncoder();
   const attempts: EncoderAttempt[] = [];
 
   if (hardware) {
     attempts.push({
       label: hardware,
-      videoArgs: buildVideoEncoderArgs(hardware),
+      videoArgs: buildVideoEncoderArgs(hardware, profile),
       audioArgs: ['-c:a', 'copy'],
     });
   }
 
   attempts.push({
     label: 'libx264',
-    videoArgs: buildVideoEncoderArgs('libx264'),
+    videoArgs: buildVideoEncoderArgs('libx264', profile),
     audioArgs: ['-c:a', 'copy'],
   });
 
-  attempts.push({
-    label: 'libx264',
-    videoArgs: buildVideoEncoderArgs('libx264'),
-    audioArgs: ['-c:a', 'aac', '-b:a', '192k'],
-  });
+  if (profile === 'export') {
+    attempts.push({
+      label: 'libx264',
+      videoArgs: buildVideoEncoderArgs('libx264', profile),
+      audioArgs: ['-c:a', 'aac', '-b:a', '192k'],
+    });
+  }
 
   return attempts;
 }
@@ -221,6 +308,32 @@ interface OverlayAssets {
   layout: CanvasLayout;
 }
 
+function capEncodeLayout(layout: CanvasLayout, profile: BrandingEncodeProfile): CanvasLayout {
+  const maxLongEdge = profile === 'preview' ? PREVIEW_MAX_LONG_EDGE : EXPORT_MAX_LONG_EDGE;
+  const longEdge = Math.max(layout.outputWidth, layout.outputHeight);
+  if (longEdge <= maxLongEdge) {
+    return layout;
+  }
+
+  const scale = maxLongEdge / longEdge;
+  return {
+    ...layout,
+    outputWidth: Math.max(2, Math.round(layout.outputWidth * scale)),
+    outputHeight: Math.max(2, Math.round(layout.outputHeight * scale)),
+    videoX: Math.round(layout.videoX * scale),
+    videoY: Math.round(layout.videoY * scale),
+    videoWidth: Math.max(2, Math.round(layout.videoWidth * scale)),
+    videoHeight: Math.max(2, Math.round(layout.videoHeight * scale)),
+    slots: layout.slots.map((slot) => ({
+      ...slot,
+      x: Math.round(slot.x * scale),
+      y: Math.round(slot.y * scale),
+      width: Math.max(2, Math.round(slot.width * scale)),
+      height: Math.max(2, Math.round(slot.height * scale)),
+    })),
+  };
+}
+
 async function readImageDimensions(imagePath: string): Promise<ImageDimensions> {
   const sharpModule = await import('sharp');
   const metadata = await sharpModule.default(imagePath).metadata();
@@ -232,9 +345,10 @@ async function readImageDimensions(imagePath: string): Promise<ImageDimensions> 
   return { width, height };
 }
 
-async function prepareOverlayAssets(
+export async function prepareBrandingOverlayAssets(
   config: BrandingConfig,
   videoInfo: VideoInfo,
+  profile: BrandingEncodeProfile = 'export',
 ): Promise<OverlayAssets> {
   let watermarkPath: string | null = null;
   let watermarkTargetWidthPx: number | null = null;
@@ -261,7 +375,10 @@ async function prepareOverlayAssets(
     sideImages.push({ side, path: sideConfig.imagePath, dimensions });
   }
 
-  const layout = resolveCanvasLayout(videoInfo, config.canvas, sideImageDimensions);
+  const layout = capEncodeLayout(
+    resolveCanvasLayout(videoInfo, config.canvas, sideImageDimensions),
+    profile,
+  );
 
   if (config.watermark.enabled) {
     if (config.watermark.mode === 'image') {
@@ -337,13 +454,15 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
   }
 
   const { videoPath, outputPath, config, shouldCancel, registerChild, onPercent } = options;
+  const encodeProfile = options.encodeProfile ?? 'export';
+  const scaleAlgorithm = 'bilinear';
 
   if (shouldCancel?.()) {
     throw new ProcessingCancelledError();
   }
 
   const videoInfo = await probeVideoInfo(videoPath, shouldCancel, registerChild);
-  const assets = await prepareOverlayAssets(config, videoInfo);
+  const assets = await prepareBrandingOverlayAssets(config, videoInfo, encodeProfile);
 
   const inputPaths: string[] = [];
   const sideImagePlans: SideImageOverlayPlan[] = [];
@@ -395,7 +514,8 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
             targetWidthPx: assets.watermarkTargetWidthPx,
             opacity: config.watermark.opacityPercent / 100,
             position: config.watermark.position,
-            marginPx: Math.round((assets.layout.outputWidth * config.watermark.marginPercent) / 100),
+            marginXPx: Math.round((assets.layout.outputWidth * config.watermark.marginPercent) / 100),
+            marginYPx: Math.round((assets.layout.outputHeight * config.watermark.marginPercent) / 100),
           }
         : null,
     movingText:
@@ -407,6 +527,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
             verticalPeriodSeconds: speedPreset.verticalPeriodSeconds,
           }
         : null,
+    scaleAlgorithm,
   });
 
   if (!graph) {
@@ -427,7 +548,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
-  const attempts = await buildEncoderAttempts();
+  const attempts = await buildEncoderAttempts(encodeProfile);
   let lastError: unknown = null;
 
   for (const attempt of attempts) {
@@ -435,19 +556,30 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
       throw new ProcessingCancelledError();
     }
 
-    const args: string[] = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
+    const args: string[] = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-threads', '0'];
 
     if (previewDuration !== null && previewStart > 0) {
       args.push('-ss', previewStart.toFixed(3));
     }
     args.push('-i', videoPath);
 
+    const outputDurationSeconds =
+      previewDuration !== null
+        ? previewDuration
+        : expectedDuration > 0
+          ? expectedDuration
+          : null;
+
     for (const inputPath of inputPaths) {
-      args.push('-loop', '1', '-i', inputPath);
+      if (outputDurationSeconds !== null && outputDurationSeconds > 0) {
+        args.push('-loop', '1', '-t', outputDurationSeconds.toFixed(3), '-i', inputPath);
+      } else {
+        args.push('-loop', '1', '-i', inputPath);
+      }
     }
 
-    if (previewDuration !== null) {
-      args.push('-t', previewDuration.toFixed(3));
+    if (outputDurationSeconds !== null && outputDurationSeconds > 0) {
+      args.push('-t', outputDurationSeconds.toFixed(3));
     }
 
     args.push(

@@ -51,7 +51,7 @@ export function VideoBrandingPanel({ branding, showPreview = true }: VideoBrandi
 
       {!branding.configReady ? (
         <p className="text-xs leading-relaxed text-slate-400">
-          Enable an overlay, side image, canvas format, or zoom to start the live preview.
+          Enable an overlay, side image, canvas format, or zoom to see the instant preview.
         </p>
       ) : null}
 
@@ -102,7 +102,11 @@ export function VideoBrandingPanel({ branding, showPreview = true }: VideoBrandi
               progress={branding.progress}
               videos={branding.videos}
               previewVideoPath={branding.previewVideoPath}
+              sourceVideoUrl={branding.sourceVideoUrl}
               previewUrl={branding.previewUrl}
+              showInstantPreview={branding.showInstantPreview}
+              showEncodedPreview={branding.showEncodedPreview}
+              config={branding.config}
               outputFolder={branding.outputFolder}
               aspectRatio={branding.config.canvas.aspectRatio}
               customWidth={branding.config.canvas.customWidth}

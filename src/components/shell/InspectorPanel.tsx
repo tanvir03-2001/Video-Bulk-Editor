@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import type { BrandingConfig, BrandingProgress } from '../../../shared/branding';
-import type { ImageClassificationProgress, ProcessingProgress } from '../../../shared/ipc';
+import type { ComposerProgress } from '../../../shared/composer';
+import type { ImageClassificationProgress, LogEntry, ProcessingProgress } from '../../../shared/ipc';
 import type { ImageEditConfig, ImageEditProgress } from '../../../shared/imageEditing';
 import { Badge, Icon, Panel, ProgressBar, SectionHeading, StatusDot } from '../ui/ui';
 import { cx } from '../ui/cx';
+import { LogPanel } from '../LogPanel';
 import type { AppView } from './Sidebar';
 
 interface InspectorPanelProps {
@@ -20,6 +22,15 @@ interface InspectorPanelProps {
   onClassifyAllowPercentChange: (value: number) => void;
   brandingPreview: ReactNode;
   imageEditPreview: ReactNode;
+  composerPreview: ReactNode;
+  composerProgress: ComposerProgress;
+  composerActivityMessage: string | null;
+  composerActivityLogs: LogEntry[];
+  composerIsWorking: boolean;
+  composerVideoCount: number;
+  composerAudioReady: boolean;
+  composerOutputPath: string | null;
+  composerBrandingConfig: BrandingConfig;
 }
 
 function ThresholdControl({
@@ -79,6 +90,15 @@ export function InspectorPanel({
   onClassifyAllowPercentChange,
   brandingPreview,
   imageEditPreview,
+  composerPreview,
+  composerProgress,
+  composerActivityMessage,
+  composerActivityLogs,
+  composerIsWorking,
+  composerVideoCount,
+  composerAudioReady,
+  composerOutputPath,
+  composerBrandingConfig,
 }: InspectorPanelProps) {
   const busy =
     processing.status === 'processing' ||
@@ -86,7 +106,8 @@ export function InspectorPanel({
     branding.status === 'processing' ||
     branding.status === 'previewing' ||
     imageEditing.status === 'processing' ||
-    imageEditing.status === 'previewing';
+    imageEditing.status === 'previewing' ||
+    composerIsWorking;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
@@ -100,6 +121,8 @@ export function InspectorPanel({
           <InspectorHeader title="Classification" description="Review split behavior" />
         ) : view === 'branding' ? (
           <InspectorHeader title="Branding setup" description="Current overlay configuration" />
+        ) : view === 'composer' ? (
+          <InspectorHeader title="Combiner preview" description="Live preview and export progress" />
         ) : view === 'image-editor' ? (
           <InspectorHeader title="Image editing" description="Bulk image configuration" />
         ) : view === 'activity' ? (
@@ -192,6 +215,84 @@ export function InspectorPanel({
               </div>
               {branding.totalVideos > 0 ? <ProgressBar value={branding.progressPercent} /> : null}
             </Panel>
+          </>
+        ) : null}
+
+        {view === 'composer' ? (
+          <>
+            <div className="sticky top-0 z-10 -mx-1 min-h-[280px] bg-surface/95 pb-3 backdrop-blur-sm">
+              {composerPreview}
+            </div>
+            <Panel className="space-y-3 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-200">Project status</p>
+                <Badge tone={composerVideoCount > 0 && composerAudioReady ? 'success' : 'neutral'}>
+                  {composerVideoCount > 0 && composerAudioReady ? 'Ready to export' : 'Setup needed'}
+                </Badge>
+              </div>
+              <InspectorRow label="Videos" value={String(composerVideoCount)} />
+              <InspectorRow label="Audio" value={composerAudioReady ? 'Selected' : 'Not selected'} />
+              <InspectorRow
+                label="Watermark"
+                value={composerBrandingConfig.watermark.enabled ? 'Enabled' : 'Off'}
+              />
+              <InspectorRow
+                label="Moving text"
+                value={composerBrandingConfig.movingText.enabled ? 'Enabled' : 'Off'}
+              />
+              <InspectorRow
+                label="Side images"
+                value={`${countSideImages(composerBrandingConfig)} / 4`}
+              />
+              <InspectorRow label="Output" value={composerOutputPath ?? 'Not set'} mono />
+            </Panel>
+            <Panel className="space-y-3 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500">
+                Current step
+              </p>
+              {composerProgress.stepIndex > 0 ? (
+                <p className="text-xs font-medium text-sky-300">
+                  Step {composerProgress.stepIndex}/{composerProgress.stepTotal}
+                  {composerProgress.stepLabel ? ` — ${composerProgress.stepLabel}` : ''}
+                </p>
+              ) : null}
+              {composerProgress.nextStepLabel ? (
+                <p className="text-[11px] text-slate-500">
+                  Next: {composerProgress.nextStepLabel}
+                </p>
+              ) : null}
+              <div className="flex items-center gap-2 text-xs text-slate-300">
+                <StatusDot
+                  tone={
+                    composerIsWorking
+                      ? 'active'
+                      : composerProgress.status === 'error'
+                        ? 'danger'
+                        : composerProgress.status === 'completed'
+                          ? 'success'
+                          : 'neutral'
+                  }
+                />
+                {composerActivityMessage ??
+                  composerProgress.message ??
+                  composerProgress.currentStep ??
+                  'Add videos and audio to begin.'}
+              </div>
+              {composerIsWorking || composerProgress.progressPercent > 0 ? (
+                <ProgressBar value={composerProgress.progressPercent} />
+              ) : null}
+              {composerProgress.encoder ? (
+                <InspectorRow label="Encoder" value={composerProgress.encoder} />
+              ) : (
+                <InspectorRow label="Export mode" value="1080p HD" />
+              )}
+              {composerProgress.currentFile ? (
+                <p className="truncate font-mono text-[11px] text-slate-500" title={composerProgress.currentFile}>
+                  {composerProgress.currentFile}
+                </p>
+              ) : null}
+            </Panel>
+            <LogPanel logs={composerActivityLogs} title="Activity" compact />
           </>
         ) : null}
 

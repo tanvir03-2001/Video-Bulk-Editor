@@ -21,6 +21,9 @@ export function formatEstimatedRemaining(
   if (progressPercent <= 0 || elapsedMs <= 0) {
     return 'Calculating…';
   }
+  if (progressPercent >= 99 && progressPercent < 100) {
+    return 'Finalizing…';
+  }
   if (progressPercent >= 100) {
     return 'Finishing…';
   }

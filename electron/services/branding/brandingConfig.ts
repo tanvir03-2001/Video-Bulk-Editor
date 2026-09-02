@@ -8,7 +8,9 @@ import {
   DEFAULT_BRANDING_CONFIG,
   MOVING_TEXT_SPEEDS,
   OVERLAY_POSITIONS,
-  SUPPORTED_LOGO_EXTENSIONS,
+  hasAnyBrandingEnabled,
+  isSupportedLogoExtension,
+  validateBrandingConfig,
   type BrandingConfig,
   type BrandingAspectRatio,
   type BrandingFontFamily,
@@ -20,7 +22,18 @@ import {
 } from '../../../shared/branding';
 
 /** Length of the branded preview clip. Short enough to render fast, long enough to show drift. */
-export const PREVIEW_DURATION_SECONDS = 5;
+export const PREVIEW_DURATION_SECONDS = 2;
+
+/** Cap preview encode resolution to 720p on the long edge for faster renders. */
+export const PREVIEW_MAX_LONG_EDGE = 720;
+
+/** Cap export resolution to 1080p on the long edge for faster batch renders. */
+export const EXPORT_MAX_LONG_EDGE = 1080;
+
+export const EXPORT_PRESET = 'ultrafast';
+export const EXPORT_CRF = 22;
+
+export type BrandingEncodeProfile = 'preview' | 'export';
 
 /** Preview starts a little into the video so intros/black frames are skipped. */
 export const PREVIEW_START_FRACTION = 0.15;
@@ -208,63 +221,7 @@ export function sanitizeBrandingConfig(raw: unknown): BrandingConfig {
   };
 }
 
-export function hasAnyBrandingEnabled(config: BrandingConfig): boolean {
-  const canvas = config.canvas;
-  const hasSideImage = [canvas.top, canvas.bottom, canvas.left, canvas.right].some(
-    (side) => side.enabled,
-  );
-  const hasCanvasTransform = canvas.aspectRatio !== 'source' || canvas.zoomPercent !== 100;
-  return config.watermark.enabled || config.movingText.enabled || hasSideImage || hasCanvasTransform;
-}
-
-export function isSupportedLogoExtension(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase().replace('.', '');
-  return SUPPORTED_LOGO_EXTENSIONS.includes(ext);
-}
-
-/**
- * Returns a human-readable reason when the config cannot be rendered, otherwise null.
- */
-export function validateBrandingConfig(config: BrandingConfig): string | null {
-  if (!hasAnyBrandingEnabled(config)) {
-    return 'Enable Watermark, Moving Text, a side image, a canvas format, or zoom before rendering.';
-  }
-
-  if (config.watermark.enabled && config.watermark.mode === 'image') {
-    if (!config.watermark.imagePath) {
-      return 'Select a logo image file for the Image Logo watermark.';
-    }
-    if (!isSupportedLogoExtension(config.watermark.imagePath)) {
-      return `Unsupported logo format. Use ${SUPPORTED_LOGO_EXTENSIONS.join(', ')}.`;
-    }
-  }
-
-  if (config.canvas.aspectRatio === 'custom') {
-    if (config.canvas.customWidth < BRANDING_LIMITS.customRatio.min || config.canvas.customHeight < BRANDING_LIMITS.customRatio.min) {
-      return 'Custom aspect ratio width and height must be greater than zero.';
-    }
-  }
-
-  const sideImages = [
-    ['Top', config.canvas.top],
-    ['Bottom', config.canvas.bottom],
-    ['Left', config.canvas.left],
-    ['Right', config.canvas.right],
-  ] as const;
-  for (const [label, side] of sideImages) {
-    if (!side.enabled) {
-      continue;
-    }
-    if (!side.imagePath) {
-      return `Select an image for the ${label} side.`;
-    }
-    if (!isSupportedLogoExtension(side.imagePath)) {
-      return `Unsupported ${label.toLowerCase()} side image format. Use ${SUPPORTED_LOGO_EXTENSIONS.join(', ')}.`;
-    }
-  }
-
-  return null;
-}
+export { hasAnyBrandingEnabled, isSupportedLogoExtension, validateBrandingConfig };
 
 export function resolveDefaultOutputFolder(folderPath: string): string {
   return path.join(folderPath, BRANDED_VIDEOS_DIR);

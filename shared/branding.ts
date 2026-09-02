@@ -235,6 +235,68 @@ export const BRANDING_REPORT_FILE = 'branding-report.json';
 
 export const SUPPORTED_LOGO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
 
+export function isSupportedLogoExtension(filePath: string): boolean {
+  const match = /\.([^.\\/]+)$/i.exec(filePath);
+  const ext = match?.[1]?.toLowerCase() ?? '';
+  return SUPPORTED_LOGO_EXTENSIONS.includes(ext);
+}
+
+export function hasAnyBrandingEnabled(config: BrandingConfig): boolean {
+  const canvas = config.canvas;
+  const hasSideImage = [canvas.top, canvas.bottom, canvas.left, canvas.right].some(
+    (side) => side.enabled,
+  );
+  const hasCanvasTransform = canvas.aspectRatio !== 'source' || canvas.zoomPercent !== 100;
+  return config.watermark.enabled || config.movingText.enabled || hasSideImage || hasCanvasTransform;
+}
+
+/**
+ * Returns a human-readable reason when the config cannot be rendered, otherwise null.
+ */
+export function validateBrandingConfig(config: BrandingConfig): string | null {
+  if (!hasAnyBrandingEnabled(config)) {
+    return 'Enable Watermark, Moving Text, a side image, a canvas format, or zoom before rendering.';
+  }
+
+  if (config.watermark.enabled && config.watermark.mode === 'image') {
+    if (!config.watermark.imagePath) {
+      return 'Select a logo image file for the Image Logo watermark.';
+    }
+    if (!isSupportedLogoExtension(config.watermark.imagePath)) {
+      return `Unsupported logo format. Use ${SUPPORTED_LOGO_EXTENSIONS.join(', ')}.`;
+    }
+  }
+
+  if (config.canvas.aspectRatio === 'custom') {
+    if (
+      config.canvas.customWidth < BRANDING_LIMITS.customRatio.min ||
+      config.canvas.customHeight < BRANDING_LIMITS.customRatio.min
+    ) {
+      return 'Custom aspect ratio width and height must be greater than zero.';
+    }
+  }
+
+  const sideImages = [
+    ['Top', config.canvas.top],
+    ['Bottom', config.canvas.bottom],
+    ['Left', config.canvas.left],
+    ['Right', config.canvas.right],
+  ] as const;
+  for (const [label, side] of sideImages) {
+    if (!side.enabled) {
+      continue;
+    }
+    if (!side.imagePath) {
+      return `Select an image for the ${label} side.`;
+    }
+    if (!isSupportedLogoExtension(side.imagePath)) {
+      return `Unsupported ${label.toLowerCase()} side image format. Use ${SUPPORTED_LOGO_EXTENSIONS.join(', ')}.`;
+    }
+  }
+
+  return null;
+}
+
 export type BrandingStatus =
   | 'idle'
   | 'ready'

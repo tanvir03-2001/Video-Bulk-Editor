@@ -61,6 +61,11 @@ export function getFfprobePath(): string | null {
   );
 }
 
+/** FFmpeg on Windows accepts forward slashes and avoids pattern parsing issues. */
+export function toFfmpegPath(filePath: string): string {
+  return process.platform === 'win32' ? filePath.replace(/\\/g, '/') : filePath;
+}
+
 export function assertFfmpegAvailable(): { available: boolean; error: string | null } {
   const ffmpeg = getFfmpegPath();
   const ffprobe = getFfprobePath();

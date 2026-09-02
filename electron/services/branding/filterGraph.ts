@@ -28,7 +28,8 @@ export interface WatermarkOverlayPlan {
   /** 0–1 multiplier applied on top of the image's own alpha channel. */
   opacity: number;
   position: OverlayPosition;
-  marginPx: number;
+  marginXPx: number;
+  marginYPx: number;
 }
 
 export interface MovingTextOverlayPlan {
@@ -38,11 +39,14 @@ export interface MovingTextOverlayPlan {
   verticalPeriodSeconds: number;
 }
 
+export type ScaleAlgorithm = 'lanczos' | 'bilinear';
+
 export interface BrandingFilterGraphOptions {
   canvas: CanvasFilterPlan;
   sideImages?: SideImageOverlayPlan[];
   watermark?: WatermarkOverlayPlan | null;
   movingText?: MovingTextOverlayPlan | null;
+  scaleAlgorithm?: ScaleAlgorithm;
 }
 
 export interface BrandingFilterGraph {
@@ -67,15 +71,22 @@ function formatOpacity(opacity: number): string {
  */
 export function buildPositionExpressions(
   position: OverlayPosition,
-  marginPx: number,
+  marginXPx: number,
+  marginYPx?: number,
 ): { x: string; y: string } {
-  const margin = Math.max(0, Math.round(marginPx));
+  const marginX = Math.max(0, Math.round(marginXPx));
+  const marginY = Math.max(0, Math.round(marginYPx ?? marginXPx));
   const [vertical, horizontal] = position.split('-');
 
   const x =
-    horizontal === 'left' ? `${margin}` : horizontal === 'right' ? `W-w-${margin}` : `(W-w)/2`;
+    horizontal === 'left'
+      ? `${marginX}`
+      : horizontal === 'right'
+        ? `W-w-${marginX}`
+        : `(W-w)/2`;
 
-  const y = vertical === 'top' ? `${margin}` : vertical === 'bottom' ? `H-h-${margin}` : `(H-h)/2`;
+  const y =
+    vertical === 'top' ? `${marginY}` : vertical === 'bottom' ? `H-h-${marginY}` : `(H-h)/2`;
 
   return { x, y };
 }
@@ -105,6 +116,7 @@ export function buildBrandingFilterGraph(
   options: BrandingFilterGraphOptions,
 ): BrandingFilterGraph | null {
   const { canvas, sideImages = [], watermark, movingText } = options;
+  const scaleFlags = options.scaleAlgorithm ?? 'lanczos';
   if (!watermark && !movingText && sideImages.length === 0 && canvas.zoomPercent === 100) {
     return null;
   }
@@ -121,14 +133,14 @@ export function buildBrandingFilterGraph(
   const backgroundColor = canvas.backgroundColor || 'black';
 
   chains.push(
-    `[0:v]scale=${coverWidth}:${coverHeight}:force_original_aspect_ratio=increase:flags=lanczos,pad=w='max(iw,${videoWidth})':h='max(ih,${videoHeight})':x='(ow-iw)/2':y='(oh-ih)/2':color=${backgroundColor},crop=${videoWidth}:${videoHeight}:(iw-${videoWidth})/2:(ih-${videoHeight})/2,setsar=1,format=rgba,pad=${outputWidth}:${outputHeight}:${Math.round(canvas.videoX)}:${Math.round(canvas.videoY)}:color=${backgroundColor}[canvas0]`,
+    `[0:v]scale=${coverWidth}:${coverHeight}:force_original_aspect_ratio=increase:flags=${scaleFlags},pad=w='max(iw,${videoWidth})':h='max(ih,${videoHeight})':x='(ow-iw)/2':y='(oh-ih)/2':color=${backgroundColor},crop=${videoWidth}:${videoHeight}:(iw-${videoWidth})/2:(ih-${videoHeight})/2,setsar=1,format=rgba,pad=${outputWidth}:${outputHeight}:${Math.round(canvas.videoX)}:${Math.round(canvas.videoY)}:color=${backgroundColor}[canvas0]`,
   );
   let currentLabel = 'canvas0';
 
   for (const sideImage of sideImages) {
     const imageLabel = `side${sideImage.side}`;
     chains.push(
-      `[${sideImage.inputIndex}:v]scale=${Math.max(2, Math.round(sideImage.width))}:${Math.max(2, Math.round(sideImage.height))}:force_original_aspect_ratio=decrease:flags=lanczos,format=rgba,pad=${Math.max(2, Math.round(sideImage.width))}:${Math.max(2, Math.round(sideImage.height))}:(ow-iw)/2:(oh-ih)/2:color=${backgroundColor}[${imageLabel}]`,
+      `[${sideImage.inputIndex}:v]scale=${Math.max(2, Math.round(sideImage.width))}:${Math.max(2, Math.round(sideImage.height))}:force_original_aspect_ratio=decrease:flags=${scaleFlags},format=rgba,pad=${Math.max(2, Math.round(sideImage.width))}:${Math.max(2, Math.round(sideImage.height))}:(ow-iw)/2:(oh-ih)/2:color=${backgroundColor}[${imageLabel}]`,
     );
     stageIndex += 1;
     const nextLabel = `vb${stageIndex}`;
@@ -141,16 +153,20 @@ export function buildBrandingFilterGraph(
   if (watermark) {
     const scaleStep =
       watermark.targetWidthPx && watermark.targetWidthPx > 0
-        ? `scale=${Math.max(2, Math.round(watermark.targetWidthPx))}:-1:flags=lanczos,`
+        ? `scale=${Math.max(2, Math.round(watermark.targetWidthPx))}:-1:flags=${scaleFlags},`
         : '';
     chains.push(
       `[${watermark.inputIndex}:v]${scaleStep}format=rgba,colorchannelmixer=aa=${formatOpacity(watermark.opacity)}[wmimg]`,
     );
 
-    const { x, y } = buildPositionExpressions(watermark.position, watermark.marginPx);
+    const { x, y } = buildPositionExpressions(
+      watermark.position,
+      watermark.marginXPx,
+      watermark.marginYPx,
+    );
     stageIndex += 1;
     const nextLabel = `vb${stageIndex}`;
-    chains.push(`[${currentLabel}][wmimg]overlay=x=${x}:y=${y}:eof_action=repeat:eval=init[${nextLabel}]`);
+    chains.push(`[${currentLabel}][wmimg]overlay=x=${x}:y=${y}:eof_action=repeat:eval=init:shortest=1[${nextLabel}]`);
     currentLabel = nextLabel;
   }
 
@@ -166,7 +182,7 @@ export function buildBrandingFilterGraph(
     stageIndex += 1;
     const nextLabel = `vb${stageIndex}`;
     chains.push(
-      `[${currentLabel}][mtimg]overlay=x='${x}':y='${y}':eof_action=repeat:eval=frame[${nextLabel}]`,
+      `[${currentLabel}][mtimg]overlay=x='${x}':y='${y}':eof_action=repeat:eval=frame:shortest=1[${nextLabel}]`,
     );
     currentLabel = nextLabel;
   }

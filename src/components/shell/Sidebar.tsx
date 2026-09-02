@@ -3,7 +3,7 @@ import { Badge, Icon, StatusDot } from '../ui/ui';
 import { cx } from '../ui/cx';
 import type { IconName } from '../ui/Icon';
 
-export type AppView = 'overview' | 'frames' | 'classify' | 'branding' | 'image-editor' | 'activity';
+export type AppView = 'overview' | 'frames' | 'classify' | 'branding' | 'composer' | 'image-editor' | 'activity';
 
 interface NavItem {
   id: AppView;
@@ -35,6 +35,7 @@ export function Sidebar({
     { id: 'frames', label: 'Video → Frames', icon: 'frames', badge: frameCount ? String(frameCount) : undefined },
     { id: 'classify', label: 'Classify Split', icon: 'classify', badge: mediaCount ? String(mediaCount) : undefined },
     { id: 'branding', label: 'Video Branding', icon: 'logo' },
+    { id: 'composer', label: 'Video Combiner', icon: 'video' },
     { id: 'image-editor', label: 'Image Editing', icon: 'image', badge: mediaCount ? String(mediaCount) : undefined },
   ];
 

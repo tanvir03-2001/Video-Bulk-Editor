@@ -22,6 +22,16 @@ import type {
   ImageEditPreviewRequest,
   ImageEditPresetSummary,
 } from '../shared/imageEditing';
+import type {
+  ComposerEvent,
+  ComposerExportRequest,
+  ComposerImportMediaResult,
+  ComposerPlanTimelineRequest,
+  ComposerPlanTimelineResult,
+  ComposerPreviewRequest,
+  ComposerPreviewResult,
+  ComposerThumbnailRequest,
+} from '../shared/composer';
 
 const api: ElectronApi = {
   selectFolder: (): Promise<string | null> => {
@@ -187,6 +197,86 @@ const api: ElectronApi = {
 
   previewImageEditPreset: (presetId: string): Promise<string> => {
     return ipcRenderer.invoke(IpcChannels.PREVIEW_IMAGE_EDIT_PRESET, presetId) as Promise<string>;
+  },
+
+  getLocalMediaUrl: (filePath: string): Promise<string> => {
+    return ipcRenderer.invoke(IpcChannels.GET_LOCAL_MEDIA_URL, filePath) as Promise<string>;
+  },
+
+  selectComposerVideos: (): Promise<Array<{ name: string; path: string; extension: string }>> => {
+    return ipcRenderer.invoke(IpcChannels.SELECT_COMPOSER_VIDEOS) as Promise<
+      Array<{ name: string; path: string; extension: string }>
+    >;
+  },
+
+  selectComposerAudio: (): Promise<string | null> => {
+    return ipcRenderer.invoke(IpcChannels.SELECT_COMPOSER_AUDIO) as Promise<string | null>;
+  },
+
+  generateComposerThumbnails: (
+    request: ComposerThumbnailRequest,
+  ): Promise<ComposerImportMediaResult> => {
+    return ipcRenderer.invoke(
+      IpcChannels.GENERATE_COMPOSER_THUMBNAILS,
+      request,
+    ) as Promise<ComposerImportMediaResult>;
+  },
+
+  generateComposerPreview: (request: ComposerPreviewRequest): Promise<ComposerPreviewResult> => {
+    return ipcRenderer.invoke(
+      IpcChannels.GENERATE_COMPOSER_PREVIEW,
+      request,
+    ) as Promise<ComposerPreviewResult>;
+  },
+
+  cancelComposerPreview: (): Promise<void> => {
+    return ipcRenderer.invoke(IpcChannels.CANCEL_COMPOSER_PREVIEW) as Promise<void>;
+  },
+
+  planComposerTimeline: (
+    request: ComposerPlanTimelineRequest,
+  ): Promise<ComposerPlanTimelineResult> => {
+    return ipcRenderer.invoke(
+      IpcChannels.PLAN_COMPOSER_TIMELINE,
+      request,
+    ) as Promise<ComposerPlanTimelineResult>;
+  },
+
+  startComposerExport: (request: ComposerExportRequest): Promise<void> => {
+    return ipcRenderer.invoke(IpcChannels.START_COMPOSER_EXPORT, request) as Promise<void>;
+  },
+
+  cancelComposer: (): Promise<void> => {
+    return ipcRenderer.invoke(IpcChannels.CANCEL_COMPOSER) as Promise<void>;
+  },
+
+  onComposer: (callback: (event: ComposerEvent) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, payload: ComposerEvent): void => {
+      callback(payload);
+    };
+    ipcRenderer.on(IpcChannels.COMPOSER_EVENT, listener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.COMPOSER_EVENT, listener);
+    };
+  },
+
+  resolveComposerOutputPath: (): Promise<string> => {
+    return ipcRenderer.invoke(IpcChannels.RESOLVE_COMPOSER_OUTPUT_PATH) as Promise<string>;
+  },
+
+  probeComposerVideo: (
+    filePath: string,
+  ): Promise<{ durationSeconds: number; width: number; height: number; hasAudio: boolean }> => {
+    return ipcRenderer.invoke(IpcChannels.PROBE_COMPOSER_VIDEO, filePath) as Promise<{
+      durationSeconds: number;
+      width: number;
+      height: number;
+      hasAudio: boolean;
+    }>;
+  },
+
+  probeComposerAudio: (filePath: string): Promise<number> => {
+    return ipcRenderer.invoke(IpcChannels.PROBE_COMPOSER_AUDIO, filePath) as Promise<number>;
   },
 };
 

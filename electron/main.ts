@@ -1,7 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, protocol } from 'electron';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   IpcChannels,
   type ImageFile,
@@ -26,6 +27,7 @@ import {
 import { SUPPORTED_LOGO_EXTENSIONS } from '../shared/branding';
 import { APP_DISPLAY_NAME } from '../shared/appMeta';
 import { BrandingRunner } from './services/branding/brandingRunner';
+import { ComposerRunner } from './services/composer/composerRunner';
 import {
   resolveDefaultOutputFolder,
   sanitizeBrandingConfig,
@@ -36,16 +38,34 @@ import { scanImagesInFolder } from './services/imageScanner';
 import { configureModelCacheDir } from './services/localRiskModel';
 import { ProcessingQueue } from './services/processingQueue';
 import { scanVideosInFolder } from './services/videoScanner';
+import { probeMediaFile } from './services/mediaProbe';
+import { getVideoDurationSeconds } from './services/frameGenerator';
 import { renderImagePreview } from './services/imageEditing/imageEditor';
+import { toLocalMediaUrl, parseLocalMediaUrl } from './services/localMedia';
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const queue = new ProcessingQueue();
 const classificationRunner = new ClassificationRunner(() => queue.isRunning());
-const brandingRunner = new BrandingRunner(
-  () => queue.isRunning() || classificationRunner.isRunning(),
+const mediaRunners = {} as { brandingRunner: BrandingRunner; composerRunner: ComposerRunner };
+mediaRunners.brandingRunner = new BrandingRunner(
+  () =>
+    queue.isRunning() ||
+    classificationRunner.isRunning() ||
+    mediaRunners.composerRunner.isRunning(),
 );
+mediaRunners.composerRunner = new ComposerRunner(
+  () =>
+    queue.isRunning() ||
+    classificationRunner.isRunning() ||
+    mediaRunners.brandingRunner.isRunning(),
+);
+const { brandingRunner, composerRunner } = mediaRunners;
 const imageEditingRunner = new ImageEditingRunner(
-  () => queue.isRunning() || classificationRunner.isRunning(),
+  () =>
+    queue.isRunning() ||
+    classificationRunner.isRunning() ||
+    brandingRunner.isRunning() ||
+    composerRunner.isRunning(),
 );
 const presetPreviewCache = new Map<string, string>();
 
@@ -121,7 +141,7 @@ function isStartImageClassificationRequest(
 }
 
 function assertNoJobRunning(
-  currentJob: 'processing' | 'classification' | 'branding' | 'image-editing',
+  currentJob: 'processing' | 'classification' | 'branding' | 'image-editing' | 'composer',
 ): void {
   if (currentJob !== 'processing' && queue.isRunning()) {
     throw new Error('Video processing is already running');
@@ -134,6 +154,9 @@ function assertNoJobRunning(
   }
   if (currentJob !== 'image-editing' && imageEditingRunner.isRunning()) {
     throw new Error('Image editing is already running');
+  }
+  if (currentJob !== 'composer' && composerRunner.isRunning()) {
+    throw new Error('Video combiner is already running');
   }
 }
 
@@ -185,6 +208,11 @@ function broadcastProgress(): void {
       mainWindow.webContents.send(IpcChannels.BRANDING_EVENT, event);
     }
   });
+  const unsubscribeComposer = composerRunner.onProgress((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IpcChannels.COMPOSER_EVENT, event);
+    }
+  });
   const unsubscribeImageEditing = imageEditingRunner.onProgress((event) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IpcChannels.IMAGE_EDIT_EVENT, event);
@@ -195,8 +223,10 @@ function broadcastProgress(): void {
     unsubscribeVideo();
     unsubscribeClassification();
     unsubscribeBranding();
+    unsubscribeComposer();
     unsubscribeImageEditing();
     void brandingRunner.dispose();
+    void composerRunner.dispose();
     void imageEditingRunner.dispose();
   });
 }
@@ -289,6 +319,7 @@ function registerIpcHandlers(): void {
   });
 
   registerBrandingHandlers();
+  registerComposerHandlers();
 }
 
 function registerBrandingHandlers(): void {
@@ -404,6 +435,13 @@ function registerBrandingHandlers(): void {
     }
 
     return new Uint8Array(await fs.readFile(previewPath));
+  });
+
+  ipcMain.handle(IpcChannels.GET_LOCAL_MEDIA_URL, (_event, filePath: unknown) => {
+    if (!isValidAbsolutePath(filePath)) {
+      throw new Error('Invalid media path');
+    }
+    return toLocalMediaUrl(filePath);
   });
 
   ipcMain.handle(IpcChannels.SELECT_IMAGE_EDIT_OUTPUT_FOLDER, async () => {
@@ -563,6 +601,128 @@ function registerBrandingHandlers(): void {
   });
 }
 
+function registerComposerHandlers(): void {
+  ipcMain.handle(IpcChannels.SELECT_COMPOSER_VIDEOS, async () => {
+    if (!mainWindow) {
+      return [];
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Videos to Combine',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        {
+          name: 'Videos',
+          extensions: ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v'],
+        },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return [];
+    }
+    return result.filePaths.map((filePath) => ({
+      name: path.basename(filePath),
+      path: path.normalize(filePath),
+      extension: path.extname(filePath).replace('.', '').toLowerCase(),
+    }));
+  });
+
+  ipcMain.handle(IpcChannels.SELECT_COMPOSER_AUDIO, async () => {
+    if (!mainWindow) {
+      return null;
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Audio Track',
+      properties: ['openFile'],
+      filters: [
+        {
+          name: 'Audio',
+          extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'],
+        },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return path.normalize(result.filePaths[0]);
+  });
+
+  ipcMain.handle(IpcChannels.RESOLVE_COMPOSER_OUTPUT_PATH, () => {
+    return path.join(app.getPath('videos'), `combined-${Date.now()}.mp4`);
+  });
+
+  ipcMain.handle(IpcChannels.GENERATE_COMPOSER_THUMBNAILS, async (_event, request: unknown) => {
+    if (typeof request !== 'object' || request === null) {
+      throw new Error('Invalid thumbnail request');
+    }
+    const { videoPaths } = request as { videoPaths: unknown };
+    if (!Array.isArray(videoPaths) || !videoPaths.every(isValidAbsolutePath)) {
+      throw new Error('Invalid video paths');
+    }
+    return composerRunner.importMedia(videoPaths);
+  });
+
+  ipcMain.handle(IpcChannels.GENERATE_COMPOSER_PREVIEW, async (_event, request: unknown) => {
+    return composerRunner.generatePreview(request);
+  });
+
+  ipcMain.handle(IpcChannels.CANCEL_COMPOSER_PREVIEW, () => {
+    composerRunner.cancelPreview();
+  });
+
+  ipcMain.handle(IpcChannels.PLAN_COMPOSER_TIMELINE, async (_event, request: unknown) => {
+    if (composerRunner.isRunning()) {
+      throw new Error('Video combiner is already running');
+    }
+    return composerRunner.planTimeline(request);
+  });
+
+  ipcMain.handle(IpcChannels.START_COMPOSER_EXPORT, async (_event, request: unknown) => {
+    if (composerRunner.isRunning()) {
+      throw new Error('Video combiner is already running');
+    }
+    assertNoJobRunning('composer');
+    void composerRunner.startExport(request);
+  });
+
+  ipcMain.handle(IpcChannels.CANCEL_COMPOSER, () => {
+    composerRunner.cancel();
+  });
+
+  ipcMain.handle(IpcChannels.PROBE_COMPOSER_VIDEO, async (_event, filePath: unknown) => {
+    if (!isValidAbsolutePath(filePath)) {
+      throw new Error('Invalid video path');
+    }
+    const info = await probeMediaFile(filePath);
+    return {
+      durationSeconds: info.durationSeconds,
+      width: info.width,
+      height: info.height,
+      hasAudio: info.hasAudio,
+    };
+  });
+
+  ipcMain.handle(IpcChannels.PROBE_COMPOSER_AUDIO, async (_event, filePath: unknown) => {
+    if (!isValidAbsolutePath(filePath)) {
+      throw new Error('Invalid audio path');
+    }
+    return getVideoDurationSeconds(filePath);
+  });
+}
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'local-media',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      bypassCSP: true,
+      corsEnabled: true,
+    },
+  },
+]);
+
 app.whenReady().then(() => {
   // Local CLIP model cache under Electron userData (overridable via IMAGE_CLASSIFICATION_MODEL_CACHE).
   if (!process.env.IMAGE_CLASSIFICATION_MODEL_CACHE) {
@@ -572,6 +732,13 @@ app.whenReady().then(() => {
   }
 
   registerIpcHandlers();
+  protocol.handle('local-media', (request) => {
+    const filePath = parseLocalMediaUrl(request.url);
+    if (!path.isAbsolute(filePath)) {
+      return new Response('Invalid media path', { status: 400 });
+    }
+    return net.fetch(pathToFileURL(filePath).href, { bypassCustomProtocolHandlers: true });
+  });
   broadcastProgress();
   createWindow();
 

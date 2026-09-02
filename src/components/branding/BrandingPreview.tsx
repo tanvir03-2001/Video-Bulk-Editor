@@ -2,16 +2,22 @@ import { useEffect, useState } from 'react';
 import {
   BRANDING_ASPECT_RATIO_LABELS,
   type BrandingAspectRatio,
+  type BrandingConfig,
   type BrandingProgress,
 } from '../../../shared/branding';
 import type { VideoFile } from '../../../shared/ipc';
+import { BrandingCssOverlay } from './BrandingCssOverlay';
 import { Button, Panel } from '../ui/ui';
 
 interface BrandingPreviewProps {
   progress: BrandingProgress;
   videos: VideoFile[];
   previewVideoPath: string | null;
+  sourceVideoUrl: string | null;
   previewUrl: string | null;
+  showInstantPreview: boolean;
+  showEncodedPreview: boolean;
+  config: BrandingConfig;
   outputFolder: string | null;
   aspectRatio: BrandingAspectRatio;
   customWidth: number;
@@ -35,7 +41,11 @@ export function BrandingPreview({
   progress,
   videos,
   previewVideoPath,
+  sourceVideoUrl,
   previewUrl,
+  showInstantPreview,
+  showEncodedPreview,
+  config,
   outputFolder,
   aspectRatio,
   customWidth,
@@ -51,10 +61,8 @@ export function BrandingPreview({
   onSelectOutputFolder,
   onResetOutputFolder,
 }: BrandingPreviewProps) {
-  const hasPreview = Boolean(previewUrl);
   const [playbackError, setPlaybackError] = useState(false);
-  const canRetryPreview =
-    canPreview && (progress.status === 'error' || playbackError);
+  const canRenderPreview = canPreview && progress.status !== 'previewing';
   const renderedSize = progress.message?.match(/\b(\d+)x(\d+)\b/);
   const previewAspectRatio =
     aspectRatio === 'source'
@@ -65,9 +73,11 @@ export function BrandingPreview({
         ? `${customWidth} / ${customHeight}`
         : aspectRatio.replace(':', ' / ');
 
+  const activeVideoUrl = showEncodedPreview && previewUrl ? previewUrl : sourceVideoUrl;
+
   useEffect(() => {
     setPlaybackError(false);
-  }, [previewUrl]);
+  }, [activeVideoUrl]);
 
   return (
     <Panel className="space-y-3 bg-surface p-3.5">
@@ -92,62 +102,63 @@ export function BrandingPreview({
       </select>
 
       <div className="flex flex-wrap gap-2">
-        {canRetryPreview ? (
-          <Button variant="secondary" icon="refresh" onClick={onGeneratePreview}>
-            Retry Preview
-          </Button>
-        ) : null}
         <Button
-          variant="success"
-          icon="play"
-          onClick={onApplyToAll}
-          disabled={!canApply}
+          variant="secondary"
+          icon="refresh"
+          onClick={onGeneratePreview}
+          disabled={!canRenderPreview}
         >
+          {progress.status === 'previewing' ? 'Rendering…' : 'Render Preview'}
+        </Button>
+        <Button variant="success" icon="play" onClick={onApplyToAll} disabled={!canApply}>
           Apply to All Videos
         </Button>
-        <Button
-          variant="danger"
-          icon="stop"
-          onClick={onCancel}
-          disabled={!canCancel}
-        >
+        <Button variant="danger" icon="stop" onClick={onCancel} disabled={!canCancel}>
           Cancel
         </Button>
       </div>
 
       <div
-        className="relative w-full overflow-hidden rounded-lg border border-surface-border bg-surface shadow-inner"
+        className="relative w-full overflow-hidden rounded-lg border border-surface-border bg-black shadow-inner [container-type:size]"
         style={{ aspectRatio: previewAspectRatio }}
       >
-        {previewUrl && !playbackError ? (
-          <video
-            key={previewUrl}
-            src={previewUrl}
-            controls
-            autoPlay
-            loop
-            muted
-            playsInline
-            onError={() => {
-              setPlaybackError(true);
-            }}
-            className="block h-full w-full object-cover"
-          />
-        ) : previewUrl && playbackError ? (
+        {activeVideoUrl && !playbackError ? (
+          <>
+            <video
+              key={activeVideoUrl}
+              src={activeVideoUrl}
+              controls
+              autoPlay
+              loop
+              muted
+              playsInline
+              onError={() => {
+                setPlaybackError(true);
+              }}
+              className="block h-full w-full object-cover"
+            />
+            {showInstantPreview ? <BrandingCssOverlay config={config} /> : null}
+          </>
+        ) : activeVideoUrl && playbackError ? (
           <div className="flex h-full items-center justify-center px-3 text-center text-xs leading-relaxed text-rose-200">
-            The preview clip was created but could not be played here. It is saved as an MP4 in
-            your system temp folder.
+            The preview clip could not be played here.
           </div>
         ) : (
           <div className="flex h-full items-center justify-center px-3 text-center text-xs leading-relaxed text-slate-400">
             {progress.status === 'previewing'
-              ? `Updating live preview… ${Math.round(progress.currentVideoPercent)}%`
-              : hasPreview
-                ? 'Live preview — changes update automatically.'
-                : 'Enable an overlay to start the live preview.'}
+              ? `Rendering FFmpeg preview… ${Math.round(progress.currentVideoPercent)}%`
+              : 'Enable an overlay to see the instant preview, or press Render Preview for quality check.'}
           </div>
         )}
       </div>
+
+      <p className="text-xs leading-relaxed text-slate-500">
+        {showEncodedPreview
+          ? 'Showing encoded FFmpeg preview.'
+          : showInstantPreview
+            ? 'Instant CSS preview — overlays update immediately. Use Render Preview for final quality.'
+            : 'Select a video and enable overlays to preview.'}
+      </p>
 
       <div>
         <div className="flex items-center justify-between gap-3">

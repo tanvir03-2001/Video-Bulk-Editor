@@ -23,7 +23,9 @@ export function useVideoBranding(otherJobActive: boolean) {
   const [folder, setFolder] = useState<string | null>(null);
   const [outputFolder, setOutputFolder] = useState<string | null>(null);
   const [previewVideoPath, setPreviewVideoPath] = useState<string | null>(null);
+  const [sourceVideoUrl, setSourceVideoUrl] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showEncodedPreview, setShowEncodedPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +59,32 @@ export function useVideoBranding(otherJobActive: boolean) {
     });
   }, []);
 
-  // Load the generated clip into the sandboxed renderer as a blob URL.
+  useEffect(() => {
+    if (!previewVideoPath) {
+      setSourceVideoUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const url = await window.api.getLocalMediaUrl(previewVideoPath);
+        if (!cancelled) {
+          setSourceVideoUrl(url);
+        }
+      } catch {
+        if (!cancelled) {
+          setSourceVideoUrl(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewVideoPath]);
+
+  // Load the encoded FFmpeg preview clip when the user explicitly requests it.
   useEffect(() => {
     const path = progress.previewPath;
     if (!path || progress.status !== 'preview_ready' || loadedPreviewPath.current === path) {
@@ -75,6 +102,7 @@ export function useVideoBranding(otherJobActive: boolean) {
         }
         const blob = new Blob([new Uint8Array(bytes)], { type: 'video/mp4' });
         replacePreviewUrl(URL.createObjectURL(blob));
+        setShowEncodedPreview(true);
       } catch (readError) {
         if (!cancelled) {
           setError(readError instanceof Error ? readError.message : 'Unable to load preview');
@@ -135,6 +163,7 @@ export function useVideoBranding(otherJobActive: boolean) {
       setOutputFolder(defaultOutput);
       setPreviewVideoPath(result.videos[0]?.path ?? null);
       replacePreviewUrl(null);
+      setShowEncodedPreview(false);
       loadedPreviewPath.current = null;
       setProgress({
         ...INITIAL_BRANDING_PROGRESS,
@@ -224,43 +253,14 @@ export function useVideoBranding(otherJobActive: boolean) {
     [previewVideoPath, config, replacePreviewUrl],
   );
 
-  // Keep the preview in sync with settings without making the user press a render button.
-  // The debounce prevents an FFmpeg render for every keystroke while editing text.
-  useEffect(() => {
-    if (
-      !previewVideoPath ||
-      !configReady ||
-      busy ||
-      otherJobActive ||
-      isBranding ||
-      lastPreviewSignature.current === previewSignature
-    ) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      void startPreviewRender(previewSignature);
-    }, 650);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [
-    previewVideoPath,
-    previewSignature,
-    configReady,
-    busy,
-    otherJobActive,
-    isBranding,
-    startPreviewRender,
-  ]);
-
   const generatePreview = useCallback(async () => {
     if (!previewVideoPath) {
       return;
     }
     await startPreviewRender(previewSignature);
   }, [previewVideoPath, previewSignature, startPreviewRender]);
+
+  const showInstantPreview = Boolean(sourceVideoUrl) && configReady && !showEncodedPreview;
 
   const applyToAll = useCallback(async () => {
     if (!folder || !outputFolder || videos.length === 0) {
@@ -287,7 +287,10 @@ export function useVideoBranding(otherJobActive: boolean) {
     folder,
     outputFolder,
     previewVideoPath,
+    sourceVideoUrl,
     previewUrl,
+    showInstantPreview,
+    showEncodedPreview,
     busy,
     error,
     isBranding,

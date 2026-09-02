@@ -158,11 +158,12 @@ async function rasterizeWithSharpSvg(options: TextAssetOptions): Promise<Rasteri
   const canvasHeight = Math.ceil(
     padding + fontSize * 1.15 + (secondaryText ? secondaryFontSize * 1.45 : fontSize * 0.85) + padding,
   );
+  const left = padding;
   const right = estimatedWidth - padding;
   const primaryBaseline = Math.ceil(padding + fontSize);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${estimatedWidth}" height="${canvasHeight}">
-  <text x="${right}" y="${primaryBaseline}" text-anchor="end" font-family="${resolveFontFamily(
+  <text x="${left}" y="${primaryBaseline}" text-anchor="start" font-family="${resolveFontFamily(
     options.fontFamily,
   )}" font-size="${fontSize}" font-weight="${BRANDING_FONT_WEIGHT_VALUES[options.fontWeight]}" fill="${options.color}">${escapeMarkup(options.text)}</text>
   ${

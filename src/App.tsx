@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppShell } from './components/shell/AppShell';
 import { BrandingPreview } from './components/branding/BrandingPreview';
+import { ComposerPreview } from './components/composer/ComposerPreview';
 import { InspectorPanel } from './components/shell/InspectorPanel';
 import { Sidebar, type AppView } from './components/shell/Sidebar';
 import { StatusBar } from './components/shell/StatusBar';
@@ -9,8 +10,10 @@ import { useImageClassification } from './hooks/useImageClassification';
 import { useImageEditing } from './hooks/useImageEditing';
 import { useProcessing } from './hooks/useProcessing';
 import { useVideoBranding } from './hooks/useVideoBranding';
+import { useVideoComposer } from './hooks/useVideoComposer';
 import { ActivityWorkspace } from './components/workspaces/ActivityWorkspace';
 import { BrandingWorkspace } from './components/workspaces/BrandingWorkspace';
+import { ComposerWorkspace } from './components/workspaces/ComposerWorkspace';
 import { ClassificationWorkspace } from './components/workspaces/ClassificationWorkspace';
 import { FramesWorkspace } from './components/workspaces/FramesWorkspace';
 import { OverviewWorkspace } from './components/workspaces/OverviewWorkspace';
@@ -19,7 +22,7 @@ import { ImageEditingWorkspace } from './components/workspaces/ImageEditingWorks
 import type { ProcessingStatus } from './types/processing';
 import { formatEstimatedRemaining } from './utils/progress';
 
-type JobFocus = 'video' | 'classify' | 'branding' | 'image-editor';
+type JobFocus = 'video' | 'classify' | 'branding' | 'composer' | 'image-editor';
 
 function videoStatusLabel(status: ProcessingStatus, step: string): string {
   if (status === 'processing') {
@@ -147,9 +150,14 @@ export default function App() {
   const classifyActive = imageClassification.isClassifying;
   const branding = useVideoBranding(isProcessing || classifyActive);
   const brandingActive = branding.isBranding;
-  const imageEditing = useImageEditing(isProcessing || classifyActive || brandingActive);
+  const composer = useVideoComposer(isProcessing || classifyActive || brandingActive);
+  const composerActive = composer.isWorking;
+  const imageEditing = useImageEditing(
+    isProcessing || classifyActive || brandingActive || composerActive,
+  );
   const imageEditingActive = imageEditing.isEditing;
-  const jobActive = isProcessing || classifyActive || brandingActive || imageEditingActive;
+  const jobActive =
+    isProcessing || classifyActive || brandingActive || composerActive || imageEditingActive;
   const [activeView, setActiveView] = useState<AppView>('overview');
   const [jobFocus, setJobFocus] = useState<JobFocus>('video');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -193,6 +201,12 @@ export default function App() {
     }
   }, [imageEditingActive]);
 
+  useEffect(() => {
+    if (composerActive) {
+      setJobFocus('composer');
+    }
+  }, [composerActive]);
+
   const showBranding =
     brandingActive || (!isProcessing && !classifyActive && jobFocus === 'branding');
   const showClassify =
@@ -205,7 +219,14 @@ export default function App() {
         !classifyActive &&
         !brandingActive &&
         jobFocus === 'image-editor'));
+  const showComposer =
+    !showBranding &&
+    !showClassify &&
+    !showImageEditing &&
+    (composerActive ||
+      (!isProcessing && !classifyActive && !brandingActive && jobFocus === 'composer'));
   const brandingProgress = branding.progress;
+  const composerProgress = composer.progress;
   const classifyProgress = imageClassification.progress;
   const imageEditProgress = imageEditing.progress;
   const classifyingVideos = showClassify && classifyProgress.videoCount > 0;
@@ -216,7 +237,9 @@ export default function App() {
       ? classifyProgress.progressPercent
       : showImageEditing
         ? imageEditProgress.progressPercent
-        : progress.progressPercent;
+        : showComposer
+          ? composerProgress.progressPercent
+          : progress.progressPercent;
   const displayImageIndex = showBranding
     ? brandingProgress.currentVideoIndex
     : showClassify
@@ -237,35 +260,45 @@ export default function App() {
       ? classifyProgress.currentFile
       : showImageEditing
         ? imageEditProgress.currentFile
-        : progress.currentFile;
+        : showComposer
+          ? composerProgress.currentFile
+          : progress.currentFile;
   const displayElapsed = showBranding
     ? brandingProgress.elapsedMs
     : showClassify
       ? classifyProgress.elapsedMs
       : showImageEditing
         ? imageEditProgress.elapsedMs
-        : progress.elapsedMs;
+        : showComposer
+          ? composerProgress.elapsedMs
+          : progress.elapsedMs;
   const displayMessage = showBranding
     ? brandingProgress.message
     : showClassify
       ? classifyProgress.message
       : showImageEditing
         ? imageEditProgress.message
-        : progress.message;
+        : showComposer
+          ? composerProgress.message
+          : progress.message;
   const displayLogs = showBranding
     ? brandingProgress.logs
     : showClassify
       ? classifyProgress.logs
       : showImageEditing
         ? imageEditProgress.logs
-        : progress.logs;
+        : showComposer
+          ? composerProgress.logs
+          : progress.logs;
   const displayStatusLabel = showBranding
     ? brandingStatusLabel(brandingProgress.status)
     : showClassify
       ? classifyStatusLabel(classifyProgress.status, classifyProgress.videoCount)
       : showImageEditing
         ? imageEditStatusLabel(imageEditProgress.status)
-        : videoStatusLabel(progress.status, activeStep);
+        : showComposer
+          ? composerStatusLabel(composerProgress.status)
+          : videoStatusLabel(progress.status, activeStep);
   const statsCards = showBranding
     ? [
         { label: 'Videos', value: brandingProgress.totalVideos },
@@ -293,7 +326,15 @@ export default function App() {
             { label: 'Edit %', value: Math.round(imageEditProgress.progressPercent) },
             { label: 'Format', value: imageEditing.config.outputFormat.toUpperCase() },
           ]
-        : [
+        : showComposer
+          ? [
+              { label: 'Clips', value: composer.clips.length },
+              { label: 'Step', value: composerProgress.stepIndex || 0 },
+              { label: 'Total', value: composerProgress.stepTotal },
+              { label: 'Encode %', value: Math.round(composerProgress.progressPercent) },
+              { label: 'Encoder', value: composerProgress.encoder ?? '1080p HD' },
+            ]
+          : [
             { label: 'Videos', value: progress.totalVideos },
             { label: 'Done', value: progress.completedVideos },
             { label: 'Left', value: progress.remainingVideos },
@@ -318,13 +359,15 @@ export default function App() {
     brandingProgress.status === 'cancelled' ||
     imageEditProgress.status === 'completed' ||
     imageEditProgress.status === 'cancelled';
-  const canStartVideo = canStart && !classifyActive && !brandingActive && !imageEditingActive;
+  const canStartVideo =
+    canStart && !classifyActive && !brandingActive && !composerActive && !imageEditingActive;
   const canSelectVideoFolder =
     !busy &&
     !canCancel &&
     !classifyActive &&
     !isProcessing &&
     !brandingActive &&
+    !composerActive &&
     !imageEditingActive;
   const canCancelActive = isProcessing || classifyActive;
 
@@ -410,6 +453,8 @@ export default function App() {
         );
       case 'branding':
         return <BrandingWorkspace branding={branding} />;
+      case 'composer':
+        return <ComposerWorkspace composer={composer} />;
       case 'image-editor':
         return <ImageEditingWorkspace editor={imageEditing} />;
       case 'activity':
@@ -516,7 +561,11 @@ export default function App() {
               progress={branding.progress}
               videos={branding.videos}
               previewVideoPath={branding.previewVideoPath}
+              sourceVideoUrl={branding.sourceVideoUrl}
               previewUrl={branding.previewUrl}
+              showInstantPreview={branding.showInstantPreview}
+              showEncodedPreview={branding.showEncodedPreview}
+              config={branding.config}
               outputFolder={branding.outputFolder}
               aspectRatio={branding.config.canvas.aspectRatio}
               customWidth={branding.config.canvas.customWidth}
@@ -544,6 +593,31 @@ export default function App() {
             />
           }
           imageEditPreview={<ImageEditPreview editor={imageEditing} />}
+          composerPreview={
+            <ComposerPreview
+              clips={composer.clips}
+              proxyPaths={composer.proxyPaths}
+              audioPath={composer.audioPath}
+              branding={composer.branding}
+              exportedPath={composer.exportedOutputPath}
+              previewWidth={composer.previewDimensions.width}
+              previewHeight={composer.previewDimensions.height}
+              durationSeconds={composer.previewDurationSeconds}
+              playheadSeconds={composer.playheadSeconds}
+              isPlaying={composer.isPreviewPlaying}
+              onPlayheadChange={composer.setPlayheadSeconds}
+              onPlayingChange={composer.setIsPreviewPlaying}
+              label={composer.exportedOutputPath ? 'Exported preview' : 'Live preview'}
+            />
+          }
+          composerProgress={composer.progress}
+          composerActivityMessage={composer.activityMessage}
+          composerActivityLogs={composer.activityLogs}
+          composerIsWorking={composer.isWorking}
+          composerVideoCount={composer.videos.length}
+          composerAudioReady={Boolean(composer.audioPath)}
+          composerOutputPath={composer.outputPath}
+          composerBrandingConfig={composer.branding}
         />
       }
       statusBar={
@@ -587,6 +661,27 @@ export default function App() {
       {renderWorkspace()}
     </AppShell>
   );
+}
+
+function composerStatusLabel(status: string): string {
+  switch (status) {
+    case 'importing':
+      return 'Importing media';
+    case 'analyzing':
+      return 'Planning timeline';
+    case 'exporting':
+      return 'Exporting video';
+    case 'completed':
+      return 'Export complete';
+    case 'cancelled':
+      return 'Cancelled';
+    case 'error':
+      return 'Export failed';
+    case 'ready':
+      return 'Ready';
+    default:
+      return status.replace('_', ' ').replace(/^\w/, (value) => value.toUpperCase());
+  }
 }
 
 function formatElapsed(ms: number): string {

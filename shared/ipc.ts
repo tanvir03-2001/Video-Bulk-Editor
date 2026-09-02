@@ -4,6 +4,16 @@ import type {
   BrandingPreviewRequest,
 } from './branding';
 import type {
+  ComposerEvent,
+  ComposerExportRequest,
+  ComposerImportMediaResult,
+  ComposerPlanTimelineRequest,
+  ComposerPlanTimelineResult,
+  ComposerPreviewRequest,
+  ComposerPreviewResult,
+  ComposerThumbnailRequest,
+} from '../shared/composer';
+import type {
   ImageEditBatchRequest,
   ImageEditEvent,
   ImageEditPreviewRequest,
@@ -175,6 +185,19 @@ export const IpcChannels = {
   SELECT_IMAGE_EDIT_PRESET_FOLDER: 'select-image-edit-preset-folder',
   IMPORT_IMAGE_EDIT_PRESETS: 'import-image-edit-presets',
   PREVIEW_IMAGE_EDIT_PRESET: 'preview-image-edit-preset',
+  GET_LOCAL_MEDIA_URL: 'get-local-media-url',
+  SELECT_COMPOSER_VIDEOS: 'select-composer-videos',
+  SELECT_COMPOSER_AUDIO: 'select-composer-audio',
+  GENERATE_COMPOSER_THUMBNAILS: 'generate-composer-thumbnails',
+  GENERATE_COMPOSER_PREVIEW: 'generate-composer-preview',
+  CANCEL_COMPOSER_PREVIEW: 'cancel-composer-preview',
+  PLAN_COMPOSER_TIMELINE: 'plan-composer-timeline',
+  START_COMPOSER_EXPORT: 'start-composer-export',
+  CANCEL_COMPOSER: 'cancel-composer',
+  COMPOSER_EVENT: 'composer-event',
+  RESOLVE_COMPOSER_OUTPUT_PATH: 'resolve-composer-output-path',
+  PROBE_COMPOSER_VIDEO: 'probe-composer-video',
+  PROBE_COMPOSER_AUDIO: 'probe-composer-audio',
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];
@@ -275,6 +298,23 @@ export interface ElectronApi {
   selectImageEditPresetFolder: () => Promise<string | null>;
   importImageEditPresets: (folderPath: string) => Promise<ImageEditPresetSummary[]>;
   previewImageEditPreset: (presetId: string) => Promise<string>;
+  getLocalMediaUrl: (filePath: string) => Promise<string>;
+  selectComposerVideos: () => Promise<Array<{ name: string; path: string; extension: string }>>;
+  selectComposerAudio: () => Promise<string | null>;
+  generateComposerThumbnails: (
+    request: ComposerThumbnailRequest,
+  ) => Promise<ComposerImportMediaResult>;
+  generateComposerPreview: (request: ComposerPreviewRequest) => Promise<ComposerPreviewResult>;
+  cancelComposerPreview: () => Promise<void>;
+  planComposerTimeline: (request: ComposerPlanTimelineRequest) => Promise<ComposerPlanTimelineResult>;
+  startComposerExport: (request: ComposerExportRequest) => Promise<void>;
+  cancelComposer: () => Promise<void>;
+  onComposer: (callback: (event: ComposerEvent) => void) => () => void;
+  resolveComposerOutputPath: () => Promise<string>;
+  probeComposerVideo: (
+    filePath: string,
+  ) => Promise<{ durationSeconds: number; width: number; height: number; hasAudio: boolean }>;
+  probeComposerAudio: (filePath: string) => Promise<number>;
 }
 declare global {
   interface Window {

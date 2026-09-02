@@ -24,7 +24,11 @@ import {
   validateBrandingConfig,
 } from './brandingConfig';
 import { disposeOverlayAssets, getTextRendererName } from './overlayAssets';
-import { brandVideo, probeVideoInfo, resolveBrandedOutputPath } from './videoBrander';
+import {
+  brandVideo,
+  probeVideoInfo,
+  resolveBrandedOutputPath,
+} from './videoBrander';
 
 type ProgressListener = (event: BrandingEvent) => void;
 
@@ -118,6 +122,7 @@ export class BrandingRunner {
         videoPath,
         outputPath: previewPath,
         config,
+        encodeProfile: 'preview',
         previewDurationSeconds: PREVIEW_DURATION_SECONDS,
         previewStartSeconds: start,
         shouldCancel: () => this.cancelled,
@@ -196,9 +201,12 @@ export class BrandingRunner {
 
       await fs.mkdir(outputFolder, { recursive: true });
 
-      for (let index = 0; index < videos.length; index += 1) {
+      const concurrency = Math.min(3, Math.max(1, os.cpus().length - 1));
+      let nextIndex = 0;
+
+      const processVideo = async (index: number): Promise<void> => {
         if (this.cancelled) {
-          break;
+          return;
         }
 
         const video = videos[index];
@@ -223,6 +231,7 @@ export class BrandingRunner {
             videoPath: video.path,
             outputPath,
             config,
+            encodeProfile: 'export',
             shouldCancel: () => this.cancelled,
             registerChild: (child) => {
               this.currentChild = child;
@@ -258,16 +267,13 @@ export class BrandingRunner {
               videos.length,
             ),
             elapsedMs: Date.now() - this.startedAt,
-            logs: this.pushLog(
-              'success',
-              `✓ ${video.name} — branded (${result.encoder})`,
-            ),
+            logs: this.pushLog('success', `✓ ${video.name} — branded (${result.encoder})`),
           };
           this.emit('branding-progress');
         } catch (error) {
           if (error instanceof ProcessingCancelledError || this.cancelled) {
             this.cancelled = true;
-            break;
+            return;
           }
 
           const reason = error instanceof Error ? error.message : 'Unknown error';
@@ -293,7 +299,20 @@ export class BrandingRunner {
           };
           this.emit('branding-progress');
         }
-      }
+      };
+
+      const workers = Array.from({ length: concurrency }, async () => {
+        while (!this.cancelled) {
+          const index = nextIndex;
+          nextIndex += 1;
+          if (index >= videos.length) {
+            break;
+          }
+          await processVideo(index);
+        }
+      });
+
+      await Promise.all(workers);
 
       if (this.cancelled) {
         await this.writeReport(outputFolder, results, config.canvas.aspectRatio);

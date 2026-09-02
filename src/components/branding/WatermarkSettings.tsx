@@ -100,7 +100,12 @@ export function WatermarkSettings({
           checked={config.enabled}
           disabled={disabled}
           onChange={(event) => {
-            onChange({ enabled: event.target.checked });
+            const enabled = event.target.checked;
+            if (enabled && config.mode === 'image' && !config.imagePath) {
+              onChange({ enabled, mode: 'text' });
+              return;
+            }
+            onChange({ enabled });
           }}
           className="h-4 w-4 accent-accent disabled:opacity-40"
         />
