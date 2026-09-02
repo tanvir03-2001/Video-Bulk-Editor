@@ -28,6 +28,8 @@ import { buildComposerTimeline } from './clipPlanner';
 import { composeVideo, generateVideoThumbnails } from './videoComposer';
 import { generatePreviewProxy } from './previewProxy';
 import { COMPOSER_PIPELINE_STEPS, COMPOSER_STEP_TOTAL, IMPORT_CONCURRENCY } from './composerConfig';
+import { createProgressThrottle } from '../progressThrottle';
+import { cancelWhisperTranscription } from '../subtitles/whisperAsrClient';
 import { runTaskPool } from '../taskPool';
 
 type ProgressListener = (event: ComposerEvent) => void;
@@ -216,6 +218,7 @@ export class ComposerRunner {
       return;
     }
     this.cancelled = true;
+    cancelWhisperTranscription();
     if (this.currentChild && !this.currentChild.killed) {
       this.currentChild.kill('SIGTERM');
     }
@@ -482,6 +485,7 @@ export class ComposerRunner {
         progressPercent: 0,
       });
 
+      const throttlePercent = createProgressThrottle(120);
       const result = await composeVideo({
         ...exportRequest,
         shouldCancel: () => this.cancelled,
@@ -489,19 +493,21 @@ export class ComposerRunner {
           this.currentChild = child;
         },
         onPercent: (percent) => {
-          const rounded = Math.round(percent);
-          let stepLabel: string;
-          if (rounded >= 99) {
-            stepLabel = 'Finalizing encode…';
-          } else if (rounded >= 85) {
-            stepLabel = `Applying branding: ${rounded}%`;
-          } else if (rounded < 70) {
-            stepLabel = `Encoding clips: ${rounded}%`;
-          } else {
-            stepLabel = `Muxing output: ${rounded}%`;
-          }
-          this.setStep(5, stepLabel, {
-            progressPercent: percent,
+          throttlePercent(() => {
+            const rounded = Math.round(percent);
+            let stepLabel: string;
+            if (rounded >= 99) {
+              stepLabel = 'Finalizing encode…';
+            } else if (rounded >= 85) {
+              stepLabel = `Applying branding: ${rounded}%`;
+            } else if (rounded < 70) {
+              stepLabel = `Encoding clips: ${rounded}%`;
+            } else {
+              stepLabel = `Muxing output: ${rounded}%`;
+            }
+            this.setStep(5, stepLabel, {
+              progressPercent: percent,
+            });
           });
         },
         onPhase: (message) => {
@@ -515,6 +521,7 @@ export class ComposerRunner {
           });
         },
       });
+      throttlePercent.flush();
 
       if (this.cancelled) {
         this.finishCancelled();

@@ -29,6 +29,8 @@ import {
   probeVideoInfo,
   resolveBrandedOutputPath,
 } from './videoBrander';
+import { createProgressThrottle } from '../progressThrottle';
+import { cancelWhisperTranscription } from '../subtitles/whisperAsrClient';
 
 type ProgressListener = (event: BrandingEvent) => void;
 
@@ -75,6 +77,7 @@ export class BrandingRunner {
       return;
     }
     this.cancelled = true;
+    cancelWhisperTranscription();
     if (this.currentChild && !this.currentChild.killed) {
       this.currentChild.kill('SIGTERM');
     }
@@ -118,6 +121,7 @@ export class BrandingRunner {
           : 0;
 
       const previewPath = path.join(previewDir, `preview-${Date.now()}.mp4`);
+      const throttlePercent = createProgressThrottle(120);
 
       const result = await brandVideo({
         videoPath,
@@ -140,15 +144,18 @@ export class BrandingRunner {
           this.emit('branding-progress');
         },
         onPercent: (percent) => {
-          this.progress = {
-            ...this.progress,
-            currentVideoPercent: percent,
-            progressPercent: percent,
-            elapsedMs: Date.now() - this.startedAt,
-          };
-          this.emit('branding-progress');
+          throttlePercent(() => {
+            this.progress = {
+              ...this.progress,
+              currentVideoPercent: percent,
+              progressPercent: percent,
+              elapsedMs: Date.now() - this.startedAt,
+            };
+            this.emit('branding-progress');
+          });
         },
       });
+      throttlePercent.flush();
 
       if (this.cancelled) {
         this.finishCancelled();
@@ -240,6 +247,7 @@ export class BrandingRunner {
           }
 
           const outputPath = await resolveBrandedOutputPath(outputFolder, video.name);
+          const throttlePercent = createProgressThrottle(120);
           const result = await brandVideo({
             videoPath: video.path,
             outputPath,
@@ -259,16 +267,19 @@ export class BrandingRunner {
               this.emit('branding-progress');
             },
             onPercent: (percent) => {
-              const finished = this.progress.completedVideos + this.progress.failedVideos;
-              this.progress = {
-                ...this.progress,
-                currentVideoPercent: percent,
-                progressPercent: formatPercent(finished + percent / 100, videos.length),
-                elapsedMs: Date.now() - this.startedAt,
-              };
-              this.emit('branding-progress');
+              throttlePercent(() => {
+                const finished = this.progress.completedVideos + this.progress.failedVideos;
+                this.progress = {
+                  ...this.progress,
+                  currentVideoPercent: percent,
+                  progressPercent: formatPercent(finished + percent / 100, videos.length),
+                  elapsedMs: Date.now() - this.startedAt,
+                };
+                this.emit('branding-progress');
+              });
             },
           });
+          throttlePercent.flush();
 
           results.push({
             video: video.name,

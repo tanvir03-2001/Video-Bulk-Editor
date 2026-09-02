@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import type { BrandingConfig, BrandingProgress } from '../../../shared/branding';
 import type { ComposerProgress } from '../../../shared/composer';
 import type { ImageClassificationProgress, LogEntry, ProcessingProgress } from '../../../shared/ipc';
@@ -76,7 +76,7 @@ function InspectorHeader({ title, description }: { title: string; description: s
   return <SectionHeading title={title} description={description} />;
 }
 
-export function InspectorPanel({
+export const InspectorPanel = memo(function InspectorPanel({
   view,
   processing,
   classification,
@@ -366,7 +366,7 @@ export function InspectorPanel({
       </div>
     </div>
   );
-}
+});
 
 function MiniMetric({
   label,

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { VideoComposerController } from '../../hooks/useVideoComposer';
 import { ComposerAssetStrip } from '../composer/ComposerAssetStrip';
 import { ComposerControls } from '../composer/ComposerControls';
@@ -8,7 +9,9 @@ interface ComposerWorkspaceProps {
   composer: VideoComposerController;
 }
 
-export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
+export const ComposerWorkspace = memo(function ComposerWorkspace({
+  composer,
+}: ComposerWorkspaceProps) {
   const selectedClip = composer.clips.find((clip) => clip.id === composer.selectedClipId) ?? null;
   const videoOnly = composer.composerMode === 'video-only';
 
@@ -234,4 +237,4 @@ export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
       </p>
     </div>
   );
-}
+});

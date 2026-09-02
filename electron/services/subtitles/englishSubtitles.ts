@@ -5,7 +5,10 @@ import path from 'node:path';
 import { getFfmpegPath, toFfmpegPath } from '../ffmpegPaths';
 import { ProcessingCancelledError } from '../frameGenerator';
 import { runFfmpegProcess } from '../branding/ffmpegProcess';
-import { getModelCacheDir } from '../localRiskModel';
+import {
+  runWhisperTranscription,
+  type WhisperAsrChunk,
+} from './whisperAsrClient';
 
 export interface SubtitleWord {
   text: string;
@@ -19,93 +22,12 @@ export interface SubtitleCue {
   endSeconds: number;
 }
 
-const WHISPER_MODEL_ID = 'Xenova/whisper-small.en';
 const WORDS_PER_CUE = 3;
 /** Whisper often stretches the final token end; keep on-screen holds realistic. */
 const MAX_WORD_HOLD_SECONDS = 0.85;
 const MIN_WORD_HOLD_SECONDS = 0.12;
 
-type AsrChunk = {
-  text?: string;
-  timestamp?: [number | null, number | null] | number;
-};
-
-type AsrOutput = {
-  text?: string;
-  chunks?: AsrChunk[];
-};
-
-type AsrPipeline = (
-  audio: Float32Array | string,
-  options?: Record<string, unknown>,
-) => Promise<AsrOutput>;
-
-let asrPromise: Promise<AsrPipeline> | null = null;
-
-async function isWhisperCached(cacheDir: string): Promise<boolean> {
-  // @xenova/transformers stores Hub models under cacheDir/models/<org>/<name>
-  const candidates = [
-    path.join(cacheDir, 'Xenova', 'whisper-small.en'),
-    path.join(cacheDir, 'models', 'Xenova', 'whisper-small.en'),
-  ];
-  for (const candidate of candidates) {
-    try {
-      const stat = await fs.stat(candidate);
-      if (stat.isDirectory()) {
-        return true;
-      }
-    } catch {
-      // keep looking
-    }
-  }
-  return false;
-}
-
-async function loadAsrPipeline(onStatus?: (message: string) => void): Promise<AsrPipeline> {
-  const cacheDir = getModelCacheDir();
-  const transformers = await import('@xenova/transformers');
-
-  if (cacheDir) {
-    transformers.env.cacheDir = cacheDir;
-    await fs.mkdir(cacheDir, { recursive: true });
-  }
-  // Prefer local cache after first download; allow offline reuse.
-  transformers.env.allowLocalModels = true;
-
-  const cached = cacheDir ? await isWhisperCached(cacheDir) : false;
-  onStatus?.(
-    cached
-      ? 'Loading Whisper from cache…'
-      : 'Downloading Whisper model (one-time)…',
-  );
-
-  const pipeline = (await transformers.pipeline(
-    'automatic-speech-recognition',
-    WHISPER_MODEL_ID,
-  )) as AsrPipeline;
-  onStatus?.(cached ? 'Whisper model ready (cached)' : 'Whisper model ready');
-  return pipeline;
-}
-
-function getAsrPipeline(onStatus?: (message: string) => void): Promise<AsrPipeline> {
-  if (!asrPromise) {
-    asrPromise = loadAsrPipeline(onStatus).catch((error) => {
-      asrPromise = null;
-      throw error;
-    });
-  }
-  return asrPipelineWithStatus(asrPromise, onStatus);
-}
-
-async function asrPipelineWithStatus(
-  promise: Promise<AsrPipeline>,
-  onStatus?: (message: string) => void,
-): Promise<AsrPipeline> {
-  if (onStatus) {
-    onStatus('Loading Whisper model…');
-  }
-  return promise;
-}
+type AsrChunk = WhisperAsrChunk;
 
 /**
  * Extract 16 kHz mono PCM WAV for Whisper.
@@ -317,19 +239,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   return `${header}${events}\n`;
 }
 
-async function readWavAsFloat32(wavPath: string): Promise<Float32Array> {
-  const buffer = await fs.readFile(wavPath);
-  // Skip 44-byte PCM WAV header when present.
-  const dataOffset = buffer.length > 44 && buffer.toString('ascii', 0, 4) === 'RIFF' ? 44 : 0;
-  const sampleCount = Math.floor((buffer.length - dataOffset) / 2);
-  const samples = new Float32Array(sampleCount);
-  for (let index = 0; index < sampleCount; index += 1) {
-    const int16 = buffer.readInt16LE(dataOffset + index * 2);
-    samples[index] = int16 / 32768;
-  }
-  return samples;
-}
-
 export async function transcribeEnglish(options: {
   wavPath: string;
   onStatus?: (message: string) => void;
@@ -339,21 +248,17 @@ export async function transcribeEnglish(options: {
     throw new ProcessingCancelledError();
   }
 
-  const asr = await getAsrPipeline(options.onStatus);
+  // ASR + WAV decode run in a worker thread so Electron main/UI stay responsive.
+  // Timing refinement and ASS layout stay here unchanged.
+  const result = await runWhisperTranscription({
+    wavPath: options.wavPath,
+    onStatus: options.onStatus,
+    shouldCancel: options.shouldCancel,
+  });
+
   if (options.shouldCancel?.()) {
     throw new ProcessingCancelledError();
   }
-
-  options.onStatus?.('Transcribing English speech…');
-  const audio = await readWavAsFloat32(options.wavPath);
-  const result = await asr(audio, {
-    // Required so word timestamps match real wall-clock seconds for 16 kHz PCM.
-    sampling_rate: 16000,
-    return_timestamps: 'word',
-    // Shorter chunks reduce end-of-audio timestamp drift on longer tracks.
-    chunk_length_s: 20,
-    stride_length_s: 4,
-  });
 
   const chunks = Array.isArray(result.chunks) ? result.chunks : [];
   if (chunks.length === 0 && result.text?.trim()) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   COMPOSER_AUDIO_DELAY_SECONDS,
   COMPOSER_DEFAULT_VOLUME_PERCENT,
@@ -93,7 +93,9 @@ export function useVideoComposer(otherJobActive: boolean) {
 
   useEffect(() => {
     return window.api.onComposer((event) => {
-      setProgress(event.progress);
+      startTransition(() => {
+        setProgress(event.progress);
+      });
       if (event.progress.message) {
         const stepPrefix =
           event.progress.stepIndex > 0

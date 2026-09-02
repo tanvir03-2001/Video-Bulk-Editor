@@ -38,6 +38,10 @@ import { scanImagesInFolder } from './services/imageScanner';
 import { configureModelCacheDir } from './services/localRiskModel';
 import { ProcessingQueue } from './services/processingQueue';
 import { scanVideosInFolder } from './services/videoScanner';
+import {
+  disposeWhisperAsr,
+  warmupWhisperAsr,
+} from './services/subtitles/whisperAsrClient';
 import { probeMediaFile } from './services/mediaProbe';
 import { getVideoDurationSeconds } from './services/frameGenerator';
 import { renderImagePreview } from './services/imageEditing/imageEditor';
@@ -228,6 +232,7 @@ function broadcastProgress(): void {
     void brandingRunner.dispose();
     void composerRunner.dispose();
     void imageEditingRunner.dispose();
+    void disposeWhisperAsr();
   });
 }
 
@@ -741,6 +746,13 @@ app.whenReady().then(() => {
   });
   broadcastProgress();
   createWindow();
+
+  // Idle warm-up: load Whisper in a worker so the first subtitle job skips cold start.
+  setTimeout(() => {
+    void warmupWhisperAsr().catch(() => {
+      // Best-effort; first subtitle job will load the model normally.
+    });
+  }, 4000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_BRANDING_CONFIG,
   INITIAL_BRANDING_PROGRESS,
@@ -54,7 +54,9 @@ export function useVideoBranding(otherJobActive: boolean) {
 
   useEffect(() => {
     return window.api.onBranding((event) => {
-      setProgress(event.progress);
+      startTransition(() => {
+        setProgress(event.progress);
+      });
       if (event.type === 'branding-failed') {
         setError(event.progress.message);
       }

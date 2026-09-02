@@ -1,9 +1,14 @@
+import { memo } from 'react';
 import { VideoBrandingPanel } from '../branding/VideoBrandingPanel';
 import type { VideoBrandingController } from '../../hooks/useVideoBranding';
 import { Panel, SectionHeading, StatCard } from '../ui/ui';
 import { WorkflowProgressCard } from '../ui/WorkflowProgressCard';
 
-export function BrandingWorkspace({ branding }: { branding: VideoBrandingController }) {
+export const BrandingWorkspace = memo(function BrandingWorkspace({
+  branding,
+}: {
+  branding: VideoBrandingController;
+}) {
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 p-5 lg:p-7">
       <SectionHeading
@@ -55,7 +60,7 @@ export function BrandingWorkspace({ branding }: { branding: VideoBrandingControl
       />
     </div>
   );
-}
+});
 
 function brandingStatusLabel(status: string): string {
   return status === 'no_videos' ? 'No videos' : status.replace('_', ' ').replace(/^\w/, (value) => value.toUpperCase());

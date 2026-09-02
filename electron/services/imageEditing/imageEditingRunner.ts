@@ -24,10 +24,12 @@ import {
   renderImagePreview,
   resolveEditedImagePath,
 } from './imageEditor';
+import { runTaskPool } from '../taskPool';
 
 type ProgressListener = (event: ImageEditEvent) => void;
 
 const MAX_LOG_ENTRIES = 50;
+const IMAGE_EDIT_BATCH_CONCURRENCY = 2;
 
 function formatPercent(completed: number, total: number): number {
   if (total <= 0) {
@@ -130,7 +132,7 @@ export class ImageEditingRunner {
       return;
     }
 
-    const results: ImageEditReportEntry[] = [];
+    const results: Array<ImageEditReportEntry | undefined> = new Array(request.images.length);
     this.progress = {
       ...this.progress,
       status: 'processing',
@@ -157,9 +159,9 @@ export class ImageEditingRunner {
       }
       await fs.mkdir(request.outputFolder, { recursive: true });
 
-      for (let index = 0; index < request.images.length; index += 1) {
+      await runTaskPool(request.images.length, IMAGE_EDIT_BATCH_CONCURRENCY, async (index) => {
         if (this.cancelled) {
-          break;
+          return;
         }
 
         const image = request.images[index];
@@ -188,14 +190,17 @@ export class ImageEditingRunner {
             request.config,
             () => this.cancelled,
           );
-          results.push({
+          if (this.cancelled) {
+            return;
+          }
+          results[index] = {
             image: image.name,
             status: 'edited',
             outputPath: result.outputPath,
             outputWidth: result.outputWidth,
             outputHeight: result.outputHeight,
             durationMs: Date.now() - imageStartedAt,
-          });
+          };
 
           const completedImages = this.progress.completedImages + 1;
           this.progress = {
@@ -212,16 +217,16 @@ export class ImageEditingRunner {
         } catch (error) {
           if (error instanceof ProcessingCancelledError || this.cancelled) {
             this.cancelled = true;
-            break;
+            return;
           }
 
           const reason = error instanceof Error ? error.message : 'Unknown image edit error';
-          results.push({
+          results[index] = {
             image: image.name,
             status: 'failed',
             durationMs: Date.now() - imageStartedAt,
             reason,
-          });
+          };
           const failedImages = this.progress.failedImages + 1;
           this.progress = {
             ...this.progress,
@@ -236,9 +241,10 @@ export class ImageEditingRunner {
           };
           this.emit('image-edit-progress');
         }
-      }
+      });
 
-      await this.writeReport(request.outputFolder, request, results);
+      const reportEntries = results.filter((entry): entry is ImageEditReportEntry => Boolean(entry));
+      await this.writeReport(request.outputFolder, request, reportEntries);
       if (this.cancelled) {
         this.finishCancelled();
         return;

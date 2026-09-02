@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run build:electron && concurrently -k \"vite\" \"npm run dev:electron\"",
     "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
-    "build:electron": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --outdir=dist-electron --external:electron --external:ffmpeg-static --external:ffprobe-static --external:@xenova/transformers --external:sharp --external:onnxruntime-node --external:onnxruntime-web --format=cjs --sourcemap",
+    "build:electron": "esbuild electron/main.ts electron/preload.ts electron/services/subtitles/whisperWorker.ts --bundle --platform=node --outdir=dist-electron --outbase=electron --external:electron --external:ffmpeg-static --external:ffprobe-static --external:@xenova/transformers --external:sharp --external:onnxruntime-node --external:onnxruntime-web --format=cjs --sourcemap",
     "build:renderer": "tsc -p tsconfig.json --noEmit && vite build",
     "build": "npm run build:renderer && npm run build:electron && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
     "build:dir": "npm run build:renderer && npm run build:electron && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --dir",

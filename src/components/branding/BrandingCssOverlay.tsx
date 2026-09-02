@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import {
   BRANDING_FONT_STACKS,
   BRANDING_FONT_WEIGHT_VALUES,
@@ -43,27 +43,40 @@ function positionStyle(position: OverlayPosition, marginPercent: number): CSSPro
 }
 
 export function BrandingCssOverlay({ config }: BrandingCssOverlayProps) {
-  const [tick, setTick] = useState(0);
+  const movingTextRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!config.movingText.enabled) {
       return;
     }
-    const interval = window.setInterval(() => {
-      setTick((value) => value + 1);
-    }, 50);
+
+    const element = movingTextRef.current;
+    if (!element) {
+      return;
+    }
+
+    let frameId = 0;
+    let phase = 0;
+    let lastTs = 0;
+
+    const tick = (timestamp: number) => {
+      if (!lastTs) {
+        lastTs = timestamp;
+      }
+      const deltaSec = Math.min(0.05, (timestamp - lastTs) / 1000);
+      lastTs = timestamp;
+      phase += deltaSec;
+      const x = Math.sin(phase) * 18;
+      const y = Math.cos(phase * 0.7 + 1.7) * 14;
+      element.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
     return () => {
-      window.clearInterval(interval);
+      window.cancelAnimationFrame(frameId);
     };
   }, [config.movingText.enabled]);
-
-  const movingOffset = useMemo(() => {
-    const phase = tick * 0.05;
-    return {
-      x: Math.sin(phase) * 18,
-      y: Math.cos(phase * 0.7 + 1.7) * 14,
-    };
-  }, [tick]);
 
   const zoomScale = config.canvas.zoomPercent / 100;
 
@@ -148,11 +161,11 @@ export function BrandingCssOverlay({ config }: BrandingCssOverlayProps) {
 
         {config.movingText.enabled ? (
           <div
+            ref={movingTextRef}
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-medium text-white"
             style={{
               opacity: config.movingText.opacityPercent / 100,
               fontSize: `${config.movingText.sizePercent}cqh`,
-              transform: `translate(calc(-50% + ${movingOffset.x}px), calc(-50% + ${movingOffset.y}px))`,
               textShadow: '0 2px 8px rgba(0,0,0,0.55)',
             }}
           >
