@@ -64,9 +64,6 @@ export function ComposerPreview({
       return exportedPath;
     }
     const { clip } = timelinePosition;
-    if (clip.isFiller) {
-      return proxyPaths[clip.sourcePath] ?? clip.sourcePath;
-    }
     return proxyPaths[clip.sourcePath] ?? clip.sourcePath;
   }, [exportedPath, isExported, proxyPaths, timelinePosition]);
 

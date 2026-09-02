@@ -9,6 +9,7 @@ import {
 export const COMPOSER_DEFAULT_VOLUME_PERCENT = 20;
 export const COMPOSER_AUDIO_DELAY_SECONDS = 1;
 export const COMPOSER_TRANSITION_SECONDS = 0.5;
+/** Length of each auto-cut extension segment when audio outlasts primary video. */
 export const COMPOSER_FILLER_CLIP_SECONDS = 2.5;
 export const COMPOSER_OUTPUT_DIR = 'Combined Videos';
 
@@ -24,6 +25,20 @@ export interface ComposerClip {
   volumePercent: number;
   muted: boolean;
   isFiller: boolean;
+}
+
+/**
+ * Timeline length after crossfade overlaps are subtracted — matches export mux math.
+ */
+export function computeEffectiveTimelineDuration(
+  clips: Array<{ durationSeconds: number }>,
+  transitionSeconds: number,
+): number {
+  const total = clips.reduce((sum, clip) => sum + clip.durationSeconds, 0);
+  if (clips.length < 2 || transitionSeconds <= 0) {
+    return total;
+  }
+  return total - (clips.length - 1) * transitionSeconds;
 }
 
 export interface ComposerConfig {

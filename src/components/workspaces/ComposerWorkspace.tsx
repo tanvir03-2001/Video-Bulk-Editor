@@ -130,8 +130,8 @@ export function ComposerWorkspace({ composer }: ComposerWorkspaceProps) {
 
       <p className="text-xs leading-relaxed text-slate-500">
         Videos are combined to match the audio length (starting 1 second after video begins). If
-        clips are too short, a freeze-frame filler is added automatically. Default clip volume is
-        20%.
+        clips are too short, short auto-cuts from your videos are added with transitions. Default
+        clip volume is 20%.
       </p>
     </div>
   );

@@ -170,8 +170,6 @@ async function encodeClipSegment(options: {
   metadata: SourceMetadata;
   exportSize: ExportSize;
   outputPath: string;
-  tempDir: string;
-  clipIndex: number;
   encodeProfile: ComposerEncodeProfile;
   shouldCancel?: () => boolean;
   registerChild?: (child: ChildProcess | null) => void;
@@ -182,75 +180,12 @@ async function encodeClipSegment(options: {
     metadata,
     exportSize,
     outputPath,
-    tempDir,
-    clipIndex,
     encodeProfile,
     shouldCancel,
     registerChild,
   } = options;
   const vf = buildVideoFilter(exportSize);
   const duration = Math.max(0.1, clip.durationSeconds);
-
-  if (clip.isFiller) {
-    const framePath = path.join(tempDir, `filler-${clipIndex}.jpg`);
-    const seekStart = Math.max(0, metadata.durationSeconds - 0.1);
-    await runFfmpegProcess(
-      ffmpeg,
-      [
-        '-hide_banner',
-        '-loglevel',
-        'error',
-        '-nostdin',
-        '-ss',
-        seekStart.toFixed(3),
-        '-i',
-        toFfmpegPath(clip.sourcePath),
-        '-frames:v',
-        '1',
-        '-q:v',
-        '2',
-        '-y',
-        toFfmpegPath(framePath),
-      ],
-      { shouldCancel, registerChild },
-    );
-
-    await runFfmpegProcess(
-      ffmpeg,
-      [
-        '-hide_banner',
-        '-loglevel',
-        'error',
-        '-nostdin',
-        '-loop',
-        '1',
-        '-t',
-        duration.toFixed(3),
-        '-i',
-        toFfmpegPath(framePath),
-        '-f',
-        'lavfi',
-        '-t',
-        duration.toFixed(3),
-        '-i',
-        'anullsrc=channel_layout=stereo:sample_rate=44100',
-        '-vf',
-        vf,
-        '-map',
-        '0:v',
-        '-map',
-        '1:a',
-        ...segmentVideoArgs(encodeProfile),
-        ...segmentAudioArgs(),
-        '-shortest',
-        '-y',
-        toFfmpegPath(outputPath),
-      ],
-      { shouldCancel, registerChild },
-    );
-    return;
-  }
-
   const seekStart = Math.max(0, clip.startSeconds);
   const useSourceAudio = metadata.hasAudio && !clip.muted;
   const volume = clip.muted ? 0 : Math.max(0, Math.min(1, clip.volumePercent / 100));
@@ -523,8 +458,6 @@ export async function composeVideo(options: ComposeVideoOptions): Promise<Compos
           metadata,
           exportSize,
           outputPath: segmentPath,
-          tempDir,
-          clipIndex: index,
           encodeProfile,
           shouldCancel,
           registerChild,

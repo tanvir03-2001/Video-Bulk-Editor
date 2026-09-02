@@ -303,16 +303,15 @@ export function TimelineEditor({
                         onReorderClip(clip.id, x / pixelsPerSecond);
                       }}
                       className="relative h-full w-full text-left"
-                      title={`${clip.sourceName} · ${clip.durationSeconds.toFixed(1)}s`}
+                      title={`${clip.isFiller ? 'Auto cut · ' : ''}${clip.sourceName} · ${clip.durationSeconds.toFixed(1)}s`}
                     >
+                      <FilmstripBackground thumbPath={thumb} />
                       {clip.isFiller ? (
                         <div className="absolute inset-y-0 left-0 z-10 w-1 bg-amber-400/80" />
-                      ) : (
-                        <FilmstripBackground thumbPath={thumb} />
-                      )}
+                      ) : null}
                       <div className="relative z-10 flex h-full flex-col justify-end bg-gradient-to-t from-black/75 via-black/10 to-transparent p-1.5">
                         <span className="truncate text-[10px] font-medium text-white">
-                          {clip.isFiller ? 'Filler' : clip.sourceName}
+                          {clip.isFiller ? 'Auto cut' : clip.sourceName}
                         </span>
                         <span className="text-[10px] text-slate-300">
                           {clip.durationSeconds.toFixed(1)}s
