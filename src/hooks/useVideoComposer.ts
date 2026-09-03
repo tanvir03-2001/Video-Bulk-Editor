@@ -22,10 +22,10 @@ import {
   type WatermarkConfig,
 } from '../../shared/branding';
 import type { LogEntry } from '../../shared/ipc';
-import {
-  loadStoredComposerBranding,
-  saveStoredComposerBranding,
-} from '../utils/composerBrandingStorage';
+import { mergeBrandingConfig } from '../utils/mergeSettingsConfig';
+import { getInitialSettingsData } from '../utils/settingsProfileStorage';
+import { useSettingsProfiles } from './useSettingsProfiles';
+import { createDefaultComposerBranding } from '../../shared/composer';
 
 export interface ComposerVideoItem {
   path: string;
@@ -36,6 +36,8 @@ export interface ComposerVideoItem {
   height: number;
   hasAudio: boolean;
 }
+
+const composerBrandingDefaults = createDefaultComposerBranding();
 
 export function useVideoComposer(otherJobActive: boolean) {
   const [progress, setProgress] = useState<ComposerProgress>({
@@ -49,7 +51,16 @@ export function useVideoComposer(otherJobActive: boolean) {
   const [customDurationSeconds, setCustomDurationSeconds] = useState<number | null>(null);
   const [padImagePath, setPadImagePath] = useState<string | null>(null);
   const [clips, setClips] = useState<ComposerClip[]>([]);
-  const [branding, setBranding] = useState<BrandingConfig>(loadStoredComposerBranding);
+  const [branding, setBranding] = useState<BrandingConfig>(() =>
+    getInitialSettingsData('composer', composerBrandingDefaults, mergeBrandingConfig),
+  );
+  const settingsProfiles = useSettingsProfiles({
+    workspaceId: 'composer',
+    defaults: composerBrandingDefaults,
+    mergeStored: mergeBrandingConfig,
+    currentData: branding,
+    applyData: setBranding,
+  });
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [thumbnails, setThumbnails] = useState<Record<string, string[]>>({});
   const [proxyPaths, setProxyPaths] = useState<Record<string, string>>({});
@@ -116,10 +127,6 @@ export function useVideoComposer(otherJobActive: boolean) {
       }
     });
   }, [pushActivity]);
-
-  useEffect(() => {
-    saveStoredComposerBranding(branding);
-  }, [branding]);
 
   const naturalVideoDurationSeconds = useMemo(
     () => videos.reduce((sum, video) => sum + Math.max(0.1, video.durationSeconds), 0),
@@ -585,7 +592,7 @@ export function useVideoComposer(otherJobActive: boolean) {
       setOutputPath(null);
     }
 
-    pushActivity('info', 'New project started — watermark, side images, and moving text kept.');
+    pushActivity('info', 'New project started — saved settings profiles kept.');
   }, [cancel, isWorking, pushActivity]);
   const idle = !isWorking && !busy && !otherJobActive;
   const ready =
@@ -623,6 +630,7 @@ export function useVideoComposer(otherJobActive: boolean) {
     placedDuration,
     clips,
     branding,
+    settingsProfiles,
     outputPath,
     thumbnails,
     proxyPaths,

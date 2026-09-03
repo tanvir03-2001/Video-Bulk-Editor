@@ -19,8 +19,8 @@ module.exports = {
         danger: '#fb7185',
       },
       fontFamily: {
-        sans: ['"IBM Plex Sans"', 'Segoe UI', 'system-ui', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'Cascadia Code', 'Consolas', 'monospace'],
+        sans: ['Roboto', 'Segoe UI', 'system-ui', 'sans-serif'],
+        mono: ['"Roboto Mono"', 'Cascadia Code', 'Consolas', 'monospace'],
       },
       letterSpacing: {
         readable: '0.01em',

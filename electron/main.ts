@@ -721,6 +721,55 @@ function registerComposerHandlers(): void {
     }
     return getVideoDurationSeconds(filePath);
   });
+
+  ipcMain.handle(
+    IpcChannels.SAVE_SETTINGS_PROFILE_FILE,
+    async (_event, payload: unknown) => {
+      if (!mainWindow) {
+        return false;
+      }
+      if (
+        !payload ||
+        typeof payload !== 'object' ||
+        typeof (payload as { defaultName?: unknown }).defaultName !== 'string' ||
+        typeof (payload as { contents?: unknown }).contents !== 'string'
+      ) {
+        throw new Error('Invalid export payload');
+      }
+
+      const { defaultName, contents } = payload as { defaultName: string; contents: string };
+      const result = await dialog.showSaveDialog(mainWindow, {
+        title: 'Export Settings Profiles',
+        defaultPath: defaultName,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return false;
+      }
+
+      await fs.writeFile(result.filePath, contents, 'utf8');
+      return true;
+    },
+  );
+
+  ipcMain.handle(IpcChannels.READ_SETTINGS_PROFILE_FILE, async () => {
+    if (!mainWindow) {
+      return null;
+    }
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import Settings Profiles',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    return fs.readFile(result.filePaths[0], 'utf8');
+  });
 }
 
 protocol.registerSchemesAsPrivileged([

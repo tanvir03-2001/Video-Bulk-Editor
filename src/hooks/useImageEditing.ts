@@ -7,6 +7,11 @@ import {
   type ImageEditProgress,
 } from '../../shared/imageEditing';
 import type { ImageFile } from '../../shared/ipc';
+import { createFreshImageEditConfig, mergeImageEditConfig } from '../utils/mergeSettingsConfig';
+import { getInitialSettingsData } from '../utils/settingsProfileStorage';
+import { useSettingsProfiles } from './useSettingsProfiles';
+
+const imageEditDefaults = createFreshImageEditConfig();
 
 export function useImageEditing(otherJobActive: boolean) {
   const [progress, setProgress] = useState<ImageEditProgress>({
@@ -14,18 +19,16 @@ export function useImageEditing(otherJobActive: boolean) {
     logs: [],
     failedFiles: [],
   });
-  const [config, setConfig] = useState<ImageEditConfig>(() => ({
-    ...DEFAULT_IMAGE_EDIT_CONFIG,
-    canvas: {
-      ...DEFAULT_IMAGE_EDIT_CONFIG.canvas,
-      top: { ...DEFAULT_IMAGE_EDIT_CONFIG.canvas.top },
-      bottom: { ...DEFAULT_IMAGE_EDIT_CONFIG.canvas.bottom },
-      left: { ...DEFAULT_IMAGE_EDIT_CONFIG.canvas.left },
-      right: { ...DEFAULT_IMAGE_EDIT_CONFIG.canvas.right },
-    },
-    tuning: { ...DEFAULT_IMAGE_EDIT_CONFIG.tuning },
-    watermark: { ...DEFAULT_IMAGE_EDIT_CONFIG.watermark },
-  }));
+  const [config, setConfig] = useState<ImageEditConfig>(() =>
+    getInitialSettingsData('image-editor', imageEditDefaults, mergeImageEditConfig),
+  );
+  const settingsProfiles = useSettingsProfiles({
+    workspaceId: 'image-editor',
+    defaults: imageEditDefaults,
+    mergeStored: mergeImageEditConfig,
+    currentData: config,
+    applyData: setConfig,
+  });
   const [images, setImages] = useState<ImageFile[]>([]);
   const [folder, setFolder] = useState<string | null>(null);
   const [outputFolder, setOutputFolder] = useState<string | null>(null);
@@ -383,6 +386,7 @@ export function useImageEditing(otherJobActive: boolean) {
   return {
     progress,
     config,
+    settingsProfiles,
     presets,
     presetsLoading,
     presetsError,

@@ -1,5 +1,7 @@
 import type { ComposerClip } from '../../../shared/composer';
 import type { BrandingConfig, BrandingSide, WatermarkConfig } from '../../../shared/branding';
+import type { SettingsProfilesResult } from '../../hooks/useSettingsProfiles';
+import { SettingsProfilePicker } from '../settings/SettingsProfilePicker';
 import { MovingTextSettings } from '../branding/MovingTextSettings';
 import { SideImagesSettings } from '../branding/SideImagesSettings';
 import { SubtitlesPositionControls } from '../branding/SubtitlesPositionControls';
@@ -18,6 +20,7 @@ import {
 interface ComposerControlsProps {
   selectedClip: ComposerClip | null;
   branding: BrandingConfig;
+  settingsProfiles: SettingsProfilesResult<BrandingConfig>;
   outputPath: string | null;
   audioPath: string | null;
   disabled: boolean;
@@ -36,6 +39,7 @@ interface ComposerControlsProps {
 export function ComposerControls({
   selectedClip,
   branding,
+  settingsProfiles,
   outputPath,
   audioPath,
   disabled,
@@ -52,6 +56,8 @@ export function ComposerControls({
 }: ComposerControlsProps) {
   return (
     <div className="space-y-3">
+      <SettingsProfilePicker profiles={settingsProfiles} disabled={disabled} />
+
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="accent">1080p HD</Badge>
         <Badge tone="neutral">Fade transitions</Badge>

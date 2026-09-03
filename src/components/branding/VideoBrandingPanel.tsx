@@ -1,4 +1,5 @@
 import type { VideoBrandingController } from '../../hooks/useVideoBranding';
+import { SettingsProfilePicker } from '../settings/SettingsProfilePicker';
 import { CanvasSettings } from './CanvasSettings';
 import { MovingTextSettings } from './MovingTextSettings';
 import { SideImagesSettings } from './SideImagesSettings';
@@ -19,6 +20,8 @@ export function VideoBrandingPanel({ branding }: VideoBrandingPanelProps) {
 
   return (
     <div className="space-y-3">
+      <SettingsProfilePicker profiles={branding.settingsProfiles} disabled={settingsDisabled} />
+
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="primary"

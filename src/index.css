@@ -21,7 +21,7 @@ body {
   margin: 0;
   background: rgb(var(--app-surface));
   color: #eef1f6;
-  font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   letter-spacing: 0.01em;

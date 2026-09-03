@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { VideoComposerController } from '../../hooks/useVideoComposer';
 import { ComposerAssetStrip } from '../composer/ComposerAssetStrip';
+import { ResizableEditorSplit } from '../layout/ResizableEditorSplit';
 import { ComposerControls } from '../composer/ComposerControls';
 import { ComposerPreview } from '../composer/ComposerPreview';
 import { TimelineEditor } from '../composer/TimelineEditor';
@@ -40,7 +41,7 @@ export const ComposerWorkspace = memo(function ComposerWorkspace({
             void composer.createNewProject();
           }}
           disabled={!composer.canCreateNew}
-          title="Clear videos, audio, and timeline. Watermark, side images, and moving text stay saved."
+          title="Clear videos, audio, and timeline. Saved settings profiles stay intact."
         >
           New Project
         </Button>
@@ -195,87 +196,92 @@ export const ComposerWorkspace = memo(function ComposerWorkspace({
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
-        <div className="flex min-h-0 flex-col overflow-hidden border-b border-surface-border xl:border-b-0 xl:border-r">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface/30 p-3 lg:p-4">
-            <ComposerPreview
-              clips={composer.clips}
-              proxyPaths={composer.proxyPaths}
-              audioPath={composer.audioPath}
+      <ResizableEditorSplit
+        settings={
+          <>
+            <ComposerControls
+              selectedClip={selectedClip}
               branding={composer.branding}
-              exportedPath={composer.exportedOutputPath}
-              previewWidth={composer.previewDimensions.width}
-              previewHeight={composer.previewDimensions.height}
-              durationSeconds={composer.previewDurationSeconds}
-              playheadSeconds={composer.playheadSeconds}
-              isPlaying={composer.isPreviewPlaying}
-              onPlayheadChange={composer.setPlayheadSeconds}
-              onPlayingChange={composer.setIsPreviewPlaying}
-              label={composer.exportedOutputPath ? 'Exported preview' : 'Live preview'}
-            />
-          </div>
-          <div className="max-h-[42%] shrink-0 space-y-2 overflow-y-auto border-t border-surface-border bg-surface/80 p-2.5 lg:p-3">
-            <ComposerAssetStrip
-              videos={composer.videos}
-              thumbnails={composer.thumbnails}
-              disabled={!composer.canAddVideos}
-              onRemoveVideo={(videoPath) => {
-                void composer.removeVideo(videoPath);
-              }}
-            />
-            <TimelineEditor
-              clips={composer.clips}
-              thumbnails={composer.thumbnails}
-              targetDurationSeconds={composer.targetDurationSeconds}
-              audioDurationSeconds={composer.audioDurationSeconds}
+              settingsProfiles={composer.settingsProfiles}
+              outputPath={composer.outputPath}
               audioPath={composer.audioPath}
-              selectedClipId={composer.selectedClipId}
-              playheadSeconds={composer.playheadSeconds}
-              isPlaying={composer.isPreviewPlaying}
-              pixelsPerSecond={composer.timelineZoom}
-              onSelectClip={composer.setSelectedClipId}
-              onReorderClip={composer.reorderClip}
-              onRemoveClip={(clipId) => {
-                void composer.removeClip(clipId);
+              disabled={!composer.canAddVideos}
+              onUpdateClip={composer.updateClip}
+              onUpdateWatermark={composer.updateWatermarkWithEnable}
+              onUpdateWatermarkText={composer.updateWatermarkText}
+              onUpdateMovingText={composer.updateMovingText}
+              onUpdateSideImage={composer.updateSideImage}
+              onUpdateImagePreset={composer.updateImagePreset}
+              onUpdateSubtitles={composer.updateSubtitles}
+              onSelectLogoImage={() => {
+                void composer.selectLogoImage();
               }}
-              onPlayheadChange={composer.setPlayheadSeconds}
-              onPlayingChange={composer.setIsPreviewPlaying}
-              onZoomChange={composer.setTimelineZoom}
+              onSelectSideImage={(side) => {
+                void composer.selectSideImage(side);
+              }}
+              onSelectOutputPath={() => {
+                void composer.selectOutputPath();
+              }}
             />
+            <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+              {videoOnly
+                ? 'Only Video mode combines clips without a soundtrack. Set a custom duration to extend with a pad image or auto-cut fillers.'
+                : 'Video + Audio matches the soundtrack length. Short timelines get auto-cut fillers. Default clip volume is 20%.'}
+            </p>
+          </>
+        }
+        preview={
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface/30 p-3 lg:p-4">
+              <ComposerPreview
+                clips={composer.clips}
+                proxyPaths={composer.proxyPaths}
+                audioPath={composer.audioPath}
+                branding={composer.branding}
+                exportedPath={composer.exportedOutputPath}
+                previewWidth={composer.previewDimensions.width}
+                previewHeight={composer.previewDimensions.height}
+                durationSeconds={composer.previewDurationSeconds}
+                playheadSeconds={composer.playheadSeconds}
+                isPlaying={composer.isPreviewPlaying}
+                onPlayheadChange={composer.setPlayheadSeconds}
+                onPlayingChange={composer.setIsPreviewPlaying}
+                label={composer.exportedOutputPath ? 'Exported preview' : 'Live preview'}
+              />
+            </div>
+            <div className="max-h-[42%] shrink-0 space-y-2 overflow-y-auto border-t border-surface-border bg-surface/80 p-2.5 lg:p-3">
+              <ComposerAssetStrip
+                videos={composer.videos}
+                thumbnails={composer.thumbnails}
+                disabled={!composer.canAddVideos}
+                onRemoveVideo={(videoPath) => {
+                  void composer.removeVideo(videoPath);
+                }}
+              />
+              <TimelineEditor
+                clips={composer.clips}
+                thumbnails={composer.thumbnails}
+                targetDurationSeconds={composer.targetDurationSeconds}
+                audioDurationSeconds={composer.audioDurationSeconds}
+                audioPath={composer.audioPath}
+                selectedClipId={composer.selectedClipId}
+                playheadSeconds={composer.playheadSeconds}
+                isPlaying={composer.isPreviewPlaying}
+                pixelsPerSecond={composer.timelineZoom}
+                onSelectClip={composer.setSelectedClipId}
+                onReorderClip={composer.reorderClip}
+                onRemoveClip={(clipId) => {
+                  void composer.removeClip(clipId);
+                }}
+                onPlayheadChange={composer.setPlayheadSeconds}
+                onPlayingChange={composer.setIsPreviewPlaying}
+                onZoomChange={composer.setTimelineZoom}
+              />
+            </div>
           </div>
-        </div>
-
-        <div className="min-h-0 overflow-y-auto p-3 lg:p-4">
-          <ComposerControls
-            selectedClip={selectedClip}
-            branding={composer.branding}
-            outputPath={composer.outputPath}
-            audioPath={composer.audioPath}
-            disabled={!composer.canAddVideos}
-            onUpdateClip={composer.updateClip}
-            onUpdateWatermark={composer.updateWatermarkWithEnable}
-            onUpdateWatermarkText={composer.updateWatermarkText}
-            onUpdateMovingText={composer.updateMovingText}
-            onUpdateSideImage={composer.updateSideImage}
-            onUpdateImagePreset={composer.updateImagePreset}
-            onUpdateSubtitles={composer.updateSubtitles}
-            onSelectLogoImage={() => {
-              void composer.selectLogoImage();
-            }}
-            onSelectSideImage={(side) => {
-              void composer.selectSideImage(side);
-            }}
-            onSelectOutputPath={() => {
-              void composer.selectOutputPath();
-            }}
-          />
-          <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-            {videoOnly
-              ? 'Only Video mode combines clips without a soundtrack. Set a custom duration to extend with a pad image or auto-cut fillers.'
-              : 'Video + Audio matches the soundtrack length. Short timelines get auto-cut fillers. Default clip volume is 20%.'}
-          </p>
-        </div>
-      </div>
+        }
+        previewClassName="bg-surface/30 p-0 lg:p-0"
+      />
 
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-surface-border bg-surface-raised/60 px-3 py-2 lg:px-4">
         <StatusDot

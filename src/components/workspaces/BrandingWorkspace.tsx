@@ -1,4 +1,5 @@
 import type { VideoBrandingController } from '../../hooks/useVideoBranding';
+import { ResizableEditorSplit } from '../layout/ResizableEditorSplit';
 import { BrandingPreview } from '../branding/BrandingPreview';
 import { VideoBrandingPanel } from '../branding/VideoBrandingPanel';
 import {
@@ -58,11 +59,9 @@ export function BrandingWorkspace({ branding }: { branding: VideoBrandingControl
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
-        <div className="min-h-0 overflow-y-auto border-b border-surface-border p-3 lg:border-b-0 lg:border-r lg:p-4">
-          <VideoBrandingPanel branding={branding} />
-        </div>
-        <div className="flex min-h-0 flex-col overflow-hidden bg-surface/40 p-3 lg:p-4">
+      <ResizableEditorSplit
+        settings={<VideoBrandingPanel branding={branding} />}
+        preview={
           <BrandingPreview
             progress={branding.progress}
             videos={branding.videos}
@@ -97,8 +96,8 @@ export function BrandingWorkspace({ branding }: { branding: VideoBrandingControl
               void branding.resetOutputFolder();
             }}
           />
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-surface-border bg-surface-raised/60 px-3 py-2 lg:px-4">
         <div className="flex items-center gap-2">

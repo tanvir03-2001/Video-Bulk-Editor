@@ -14,6 +14,7 @@ import {
   type BrandingSide,
 } from '../../../shared/branding';
 import type { ImageEditingController } from '../../hooks/useImageEditing';
+import { SettingsProfilePicker } from '../settings/SettingsProfilePicker';
 import { Badge, Button, controlBase, Icon, Panel } from '../ui/ui';
 
 const inputBase = controlBase;
@@ -35,6 +36,8 @@ export function ImageEditingPanel({ editor }: { editor: ImageEditingController }
 
   return (
     <div className="space-y-3">
+      <SettingsProfilePicker profiles={editor.settingsProfiles} disabled={disabled} />
+
       <div>
         <button
           type="button"

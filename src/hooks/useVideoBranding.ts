@@ -1,6 +1,5 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  DEFAULT_BRANDING_CONFIG,
   INITIAL_BRANDING_PROGRESS,
   type BrandingConfig,
   type BrandingCanvasConfig,
@@ -13,6 +12,11 @@ import {
   type WatermarkConfig,
 } from '../../shared/branding';
 import type { VideoFile } from '../../shared/ipc';
+import { createFreshBrandingConfig, mergeBrandingConfig } from '../utils/mergeSettingsConfig';
+import { getInitialSettingsData } from '../utils/settingsProfileStorage';
+import { useSettingsProfiles } from './useSettingsProfiles';
+
+const brandingDefaults = createFreshBrandingConfig();
 
 export function useVideoBranding(otherJobActive: boolean) {
   const [progress, setProgress] = useState<BrandingProgress>({
@@ -20,7 +24,16 @@ export function useVideoBranding(otherJobActive: boolean) {
     logs: [],
     failedFiles: [],
   });
-  const [config, setConfig] = useState<BrandingConfig>(DEFAULT_BRANDING_CONFIG);
+  const [config, setConfig] = useState<BrandingConfig>(() =>
+    getInitialSettingsData('branding', brandingDefaults, mergeBrandingConfig),
+  );
+  const settingsProfiles = useSettingsProfiles({
+    workspaceId: 'branding',
+    defaults: brandingDefaults,
+    mergeStored: mergeBrandingConfig,
+    currentData: config,
+    applyData: setConfig,
+  });
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [folder, setFolder] = useState<string | null>(null);
   const [outputFolder, setOutputFolder] = useState<string | null>(null);
@@ -303,6 +316,7 @@ export function useVideoBranding(otherJobActive: boolean) {
   return {
     progress,
     config,
+    settingsProfiles,
     videos,
     folder,
     outputFolder,

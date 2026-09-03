@@ -1,4 +1,5 @@
 import type { ImageEditingController } from '../../hooks/useImageEditing';
+import { ResizableEditorSplit } from '../layout/ResizableEditorSplit';
 import { ImageEditPreview } from '../imageEditing/ImageEditPreview';
 import { ImageEditingPanel } from '../imageEditing/ImageEditingPanel';
 import {
@@ -99,14 +100,10 @@ export function ImageEditingWorkspace({ editor }: { editor: ImageEditingControll
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
-        <div className="min-h-0 overflow-y-auto border-b border-surface-border p-3 lg:border-b-0 lg:border-r lg:p-4">
-          <ImageEditingPanel editor={editor} />
-        </div>
-        <div className="flex min-h-0 flex-col overflow-hidden bg-surface/40 p-3 lg:p-4">
-          <ImageEditPreview editor={editor} />
-        </div>
-      </div>
+      <ResizableEditorSplit
+        settings={<ImageEditingPanel editor={editor} />}
+        preview={<ImageEditPreview editor={editor} />}
+      />
 
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-surface-border bg-surface-raised/60 px-3 py-2 lg:px-4">
         <div className="flex items-center gap-2">

@@ -278,6 +278,17 @@ const api: ElectronApi = {
   probeComposerAudio: (filePath: string): Promise<number> => {
     return ipcRenderer.invoke(IpcChannels.PROBE_COMPOSER_AUDIO, filePath) as Promise<number>;
   },
+
+  saveSettingsProfileFile: (payload: {
+    defaultName: string;
+    contents: string;
+  }): Promise<boolean> => {
+    return ipcRenderer.invoke(IpcChannels.SAVE_SETTINGS_PROFILE_FILE, payload) as Promise<boolean>;
+  },
+
+  readSettingsProfileFile: (): Promise<string | null> => {
+    return ipcRenderer.invoke(IpcChannels.READ_SETTINGS_PROFILE_FILE) as Promise<string | null>;
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

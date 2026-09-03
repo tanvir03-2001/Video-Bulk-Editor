@@ -128,9 +128,9 @@ export const BRANDING_FONT_FAMILIES: BrandingFontFamily[] = ['sans', 'serif', 'm
 
 /** Font stacks resolved by the local text rasterizer (no external services). */
 export const BRANDING_FONT_STACKS: Record<BrandingFontFamily, string> = {
-  sans: 'IBM Plex Sans, Segoe UI, Arial, Helvetica, sans-serif',
+  sans: 'Roboto, Segoe UI, Arial, Helvetica, sans-serif',
   serif: 'Georgia, Times New Roman, serif',
-  mono: 'IBM Plex Mono, Consolas, Courier New, monospace',
+  mono: 'Roboto Mono, Consolas, Courier New, monospace',
 };
 
 export type BrandingFontWeight = 'regular' | 'medium' | 'bold';

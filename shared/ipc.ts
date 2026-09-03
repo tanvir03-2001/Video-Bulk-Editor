@@ -198,6 +198,8 @@ export const IpcChannels = {
   RESOLVE_COMPOSER_OUTPUT_PATH: 'resolve-composer-output-path',
   PROBE_COMPOSER_VIDEO: 'probe-composer-video',
   PROBE_COMPOSER_AUDIO: 'probe-composer-audio',
+  SAVE_SETTINGS_PROFILE_FILE: 'save-settings-profile-file',
+  READ_SETTINGS_PROFILE_FILE: 'read-settings-profile-file',
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];
@@ -315,6 +317,11 @@ export interface ElectronApi {
     filePath: string,
   ) => Promise<{ durationSeconds: number; width: number; height: number; hasAudio: boolean }>;
   probeComposerAudio: (filePath: string) => Promise<number>;
+  saveSettingsProfileFile: (payload: {
+    defaultName: string;
+    contents: string;
+  }) => Promise<boolean>;
+  readSettingsProfileFile: () => Promise<string | null>;
 }
 declare global {
   interface Window {
