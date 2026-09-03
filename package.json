@@ -74,6 +74,16 @@
       "**/node_modules/@xenova/transformers/**/*",
       "**/node_modules/onnxruntime-node/**/*",
       "**/node_modules/sharp/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "ffmpeg/ffmpeg.exe"
+      },
+      {
+        "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
+        "to": "ffmpeg/ffprobe.exe"
+      }
     ]
   }
 }

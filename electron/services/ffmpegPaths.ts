@@ -8,6 +8,34 @@ function exists(filePath: string | null | undefined): filePath is string {
   return typeof filePath === 'string' && filePath.length > 0 && fs.existsSync(filePath);
 }
 
+function isInsideAsarArchive(filePath: string): boolean {
+  return filePath.includes(`${path.sep}app.asar${path.sep}`) || filePath.includes('/app.asar/');
+}
+
+/**
+ * Resolve a spawnable binary path.
+ * Electron can report files inside app.asar as existing via existsSync, but
+ * spawn() cannot execute them — they must come from app.asar.unpacked or
+ * extraResources.
+ */
+function resolveExistingBinaryPath(filePath: string | null | undefined): string | null {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    return null;
+  }
+
+  if (isInsideAsarArchive(filePath)) {
+    const unpackedPath = filePath
+      .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`)
+      .replace('/app.asar/', '/app.asar.unpacked/');
+    if (exists(unpackedPath) && !isInsideAsarArchive(unpackedPath)) {
+      return unpackedPath;
+    }
+    return null;
+  }
+
+  return exists(filePath) ? filePath : null;
+}
+
 function isElectronPackaged(): boolean {
   try {
     // Lazy require so non-Electron scripts can still resolve package binaries.
@@ -31,7 +59,7 @@ function resolveFfmpegFromPackage(): string | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ffmpegPath = require('ffmpeg-static') as string | null;
-    return exists(ffmpegPath) ? ffmpegPath : null;
+    return resolveExistingBinaryPath(ffmpegPath);
   } catch {
     return null;
   }
@@ -41,7 +69,7 @@ function resolveFfprobeFromPackage(): string | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ffprobe = require('ffprobe-static') as { path?: string };
-    return exists(ffprobe.path) ? ffprobe.path : null;
+    return resolveExistingBinaryPath(ffprobe.path);
   } catch {
     return null;
   }

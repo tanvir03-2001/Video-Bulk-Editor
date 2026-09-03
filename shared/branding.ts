@@ -149,8 +149,10 @@ export interface TextLogoConfig {
   /** Optional smaller supporting word rendered beneath and aligned right. */
   secondaryText: string;
   fontFamily: BrandingFontFamily;
-  /** Cap height as a percentage of video height, so it scales with resolution. */
+  /** Primary line cap height as a percentage of video height. */
   fontSizePercent: number;
+  /** Secondary line cap height as a percentage of video height. */
+  secondaryFontSizePercent: number;
   fontWeight: BrandingFontWeight;
   /** Hex colour, e.g. #ffffff */
   color: string;
@@ -221,6 +223,7 @@ export const BRANDING_LIMITS = {
   watermarkOpacityPercent: { min: 5, max: 100, step: 1 },
   watermarkMarginPercent: { min: 0, max: 20, step: 1 },
   textFontSizePercent: { min: 2, max: 25, step: 1 },
+  secondaryTextFontSizePercent: { min: 1, max: 20, step: 1 },
   movingTextOpacityPercent: { min: 3, max: 60, step: 1 },
   movingTextSizePercent: { min: 2, max: 20, step: 1 },
   customRatio: { min: 1, max: 10000, step: 1 },
@@ -249,6 +252,7 @@ export const DEFAULT_TEXT_LOGO_CONFIG: TextLogoConfig = {
   secondaryText: 'Radio',
   fontFamily: 'sans',
   fontSizePercent: 6,
+  secondaryFontSizePercent: 2,
   fontWeight: 'bold',
   color: '#ffffff',
   shadow: true,

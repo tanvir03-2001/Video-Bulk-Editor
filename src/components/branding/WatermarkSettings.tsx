@@ -136,18 +136,35 @@ export function WatermarkSettings({
           <div
             className="rounded-md border border-surface-border bg-black/30 px-3 py-2.5 text-right"
             aria-label="Text logo preview"
+            style={{
+              fontFamily:
+                config.text.fontFamily === 'serif'
+                  ? 'Georgia, serif'
+                  : config.text.fontFamily === 'mono'
+                    ? 'Consolas, monospace'
+                    : 'Roboto, sans-serif',
+              fontWeight: config.text.fontWeight === 'regular' ? 400 : config.text.fontWeight === 'medium' ? 600 : 800,
+              color: config.text.color,
+            }}
           >
-            <p className="text-2xl font-bold leading-none tracking-tight text-white">
+            <p
+              className="leading-none tracking-tight"
+              style={{ fontSize: `${10 + config.text.fontSizePercent * 2}px` }}
+            >
               {config.text.text || 'Smooth'}
             </p>
             {config.text.secondaryText ? (
-              <p className="mt-0.5 pr-0.5 text-sm font-semibold leading-none text-white">
+              <p
+                className="mt-1 leading-none"
+                style={{ fontSize: `${8 + config.text.secondaryFontSizePercent * 2}px` }}
+              >
                 {config.text.secondaryText}
               </p>
             ) : null}
           </div>
           <p className="text-[11px] leading-relaxed text-slate-500">
-            The secondary line is rendered smaller and aligned to the right, like a broadcast station lockup.
+            Primary/secondary sizes set lockup typography. Logo size sets overall width on the
+            video (preview matches export).
           </p>
           <div className="grid grid-cols-2 gap-2">
             <Select
@@ -178,8 +195,8 @@ export function WatermarkSettings({
             </Select>
           </div>
           <RangeField
-            id="wm-font-size"
-            label="Text Size"
+            id="wm-primary-font-size"
+            label="Primary Text Size"
             value={config.text.fontSizePercent}
             min={BRANDING_LIMITS.textFontSizePercent.min}
             max={BRANDING_LIMITS.textFontSizePercent.max}
@@ -189,6 +206,33 @@ export function WatermarkSettings({
               onTextChange({ fontSizePercent: value });
             }}
             formatValue={(value) => `${value}%`}
+          />
+          <RangeField
+            id="wm-secondary-font-size"
+            label="Secondary Text Size"
+            value={config.text.secondaryFontSizePercent}
+            min={BRANDING_LIMITS.secondaryTextFontSizePercent.min}
+            max={BRANDING_LIMITS.secondaryTextFontSizePercent.max}
+            step={BRANDING_LIMITS.secondaryTextFontSizePercent.step}
+            disabled={controlsDisabled || !config.text.secondaryText.trim()}
+            onChange={(value) => {
+              onTextChange({ secondaryFontSizePercent: value });
+            }}
+            formatValue={(value) => `${value}%`}
+          />
+          <RangeField
+            id="wm-text-logo-size"
+            label="Logo Size"
+            value={config.scalePercent}
+            min={BRANDING_LIMITS.watermarkScalePercent.min}
+            max={BRANDING_LIMITS.watermarkScalePercent.max}
+            step={BRANDING_LIMITS.watermarkScalePercent.step}
+            disabled={controlsDisabled}
+            onChange={(value) => {
+              onChange({ scalePercent: value });
+            }}
+            formatValue={(value) => `${value}%`}
+            hint="Overall text-logo width relative to the video frame."
           />
           <div className="flex items-center justify-between gap-2">
             <label htmlFor="wm-color" className="text-xs font-medium text-slate-300">

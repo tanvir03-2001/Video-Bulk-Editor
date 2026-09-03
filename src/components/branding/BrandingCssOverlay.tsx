@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
-  BRANDING_FONT_STACKS,
-  BRANDING_FONT_WEIGHT_VALUES,
   DEFAULT_BRANDING_SUBTITLES,
   type BrandingConfig,
   type BrandingSide,
@@ -9,6 +7,7 @@ import {
 } from '../../../shared/branding';
 import { LocalMediaImage } from '../ui/LocalMediaImage';
 import { resolvePreviewLayout, type PreviewSideDims } from './previewLayout';
+import { TextLogoCssLockup } from './TextLogoCssLockup';
 
 interface BrandingCssOverlayProps {
   config: BrandingConfig;
@@ -210,44 +209,27 @@ export function BrandingCssOverlay({
       ) : null}
 
       {config.watermark.enabled ? (
-        <div
-          style={{
-            ...positionStyle(config.watermark.position, config.watermark.marginPercent),
-            opacity: config.watermark.opacityPercent / 100,
-            ...(config.watermark.mode === 'image' && config.watermark.imagePath
-              ? { maxWidth: `${config.watermark.scalePercent}%` }
-              : {}),
-            zIndex: 2,
-          }}
-        >
-          {config.watermark.mode === 'image' && config.watermark.imagePath ? (
+        config.watermark.mode === 'image' && config.watermark.imagePath ? (
+          <div
+            style={{
+              ...positionStyle(config.watermark.position, config.watermark.marginPercent),
+              opacity: config.watermark.opacityPercent / 100,
+              maxWidth: `${config.watermark.scalePercent}%`,
+              zIndex: 2,
+            }}
+          >
             <LocalMediaImage
               filePath={config.watermark.imagePath}
               alt="Watermark"
               className="h-auto w-full object-contain"
             />
-          ) : (
-            <div
-              className="leading-tight"
-              style={{
-                fontFamily: BRANDING_FONT_STACKS[config.watermark.text.fontFamily],
-                fontWeight: BRANDING_FONT_WEIGHT_VALUES[config.watermark.text.fontWeight],
-                fontSize: `${config.watermark.text.fontSizePercent}cqh`,
-                color: config.watermark.text.color,
-                textShadow: config.watermark.text.shadow
-                  ? '0 2px 8px rgba(0,0,0,0.65)'
-                  : undefined,
-              }}
-            >
-              <div>{config.watermark.text.text}</div>
-              {config.watermark.text.secondaryText ? (
-                <div style={{ fontSize: '0.38em', textAlign: 'right' }}>
-                  {config.watermark.text.secondaryText}
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
+          </div>
+        ) : config.watermark.mode === 'text' ? (
+          <TextLogoCssLockup
+            config={config.watermark}
+            className="pointer-events-none absolute inset-0 z-[2] overflow-hidden"
+          />
+        ) : null
       ) : null}
 
       {config.movingText.enabled ? (

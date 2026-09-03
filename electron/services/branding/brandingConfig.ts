@@ -93,6 +93,12 @@ function sanitizeTextLogo(raw: unknown): TextLogoConfig {
       BRANDING_LIMITS.textFontSizePercent.max,
       defaults.fontSizePercent,
     ),
+    secondaryFontSizePercent: clampNumber(
+      source.secondaryFontSizePercent,
+      BRANDING_LIMITS.secondaryTextFontSizePercent.min,
+      BRANDING_LIMITS.secondaryTextFontSizePercent.max,
+      defaults.secondaryFontSizePercent,
+    ),
     fontWeight: sanitizeEnum<BrandingFontWeight>(
       source.fontWeight,
       BRANDING_FONT_WEIGHTS,

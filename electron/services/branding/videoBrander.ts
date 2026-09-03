@@ -411,11 +411,15 @@ export async function prepareBrandingOverlayAssets(
         ),
         secondaryFontSizePx: Math.max(
           4,
-          Math.round((layout.outputHeight * config.watermark.text.fontSizePercent * 0.38) / 100),
+          Math.round((layout.outputHeight * config.watermark.text.secondaryFontSizePercent) / 100),
         ),
         maxWidthPx: Math.round(layout.outputWidth * 0.9),
         shadow: config.watermark.text.shadow,
       });
+      watermarkTargetWidthPx = Math.max(
+        2,
+        Math.round((layout.outputWidth * config.watermark.scalePercent) / 100),
+      );
     }
   }
 

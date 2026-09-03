@@ -1,11 +1,10 @@
 import type { CSSProperties } from 'react';
 import {
-  BRANDING_FONT_STACKS,
-  BRANDING_FONT_WEIGHT_VALUES,
   type OverlayPosition,
   type WatermarkConfig,
 } from '../../../shared/branding';
 import { LocalMediaImage } from '../ui/LocalMediaImage';
+import { TextLogoCssLockup } from './TextLogoCssLockup';
 
 function watermarkPositionStyle(
   position: OverlayPosition,
@@ -52,38 +51,31 @@ export function WatermarkCssOverlay({ config, className = '' }: WatermarkCssOver
 
   const isImage = config.mode === 'image' && Boolean(config.imagePath);
 
+  if (!isImage) {
+    return (
+      <TextLogoCssLockup
+        config={config}
+        className={`pointer-events-none absolute inset-0 z-10 overflow-hidden ${className}`.trim()}
+      />
+    );
+  }
+
   return (
     <div className={`pointer-events-none absolute inset-0 z-10 overflow-hidden ${className}`.trim()}>
       <div
         style={{
           ...watermarkPositionStyle(config.position, config.marginPercent),
           opacity: config.opacityPercent / 100,
-          ...(isImage ? { maxWidth: `${config.scalePercent}%` } : {}),
+          maxWidth: `${config.scalePercent}%`,
         }}
       >
-        {isImage && config.imagePath ? (
+        {config.imagePath ? (
           <LocalMediaImage
             filePath={config.imagePath}
             alt="Watermark"
             className="h-auto w-full object-contain"
           />
-        ) : (
-          <div
-            className="leading-tight"
-            style={{
-              fontFamily: BRANDING_FONT_STACKS[config.text.fontFamily],
-              fontWeight: BRANDING_FONT_WEIGHT_VALUES[config.text.fontWeight],
-              fontSize: `${config.text.fontSizePercent}cqh`,
-              color: config.text.color,
-              textShadow: config.text.shadow ? '0 2px 8px rgba(0,0,0,0.65)' : undefined,
-            }}
-          >
-            <div>{config.text.text}</div>
-            {config.text.secondaryText ? (
-              <div style={{ fontSize: '0.38em', textAlign: 'right' }}>{config.text.secondaryText}</div>
-            ) : null}
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
