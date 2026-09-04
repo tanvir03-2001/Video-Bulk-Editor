@@ -15,6 +15,7 @@ import {
   Field,
   Panel,
   RangeField,
+  TextInput,
 } from '../ui/ui';
 
 interface ComposerControlsProps {
@@ -22,6 +23,7 @@ interface ComposerControlsProps {
   branding: BrandingConfig;
   settingsProfiles: SettingsProfilesResult<BrandingConfig>;
   outputPath: string | null;
+  outputFileName: string;
   audioPath: string | null;
   disabled: boolean;
   onUpdateClip: (clipId: string, patch: Partial<ComposerClip>) => void;
@@ -34,6 +36,7 @@ interface ComposerControlsProps {
   onSelectLogoImage: () => void;
   onSelectSideImage: (side: BrandingSide) => void;
   onSelectOutputPath: () => void;
+  onOutputFileNameChange: (value: string) => void;
 }
 
 export function ComposerControls({
@@ -41,6 +44,7 @@ export function ComposerControls({
   branding,
   settingsProfiles,
   outputPath,
+  outputFileName,
   audioPath,
   disabled,
   onUpdateClip,
@@ -53,6 +57,7 @@ export function ComposerControls({
   onSelectLogoImage,
   onSelectSideImage,
   onSelectOutputPath,
+  onOutputFileNameChange,
 }: ComposerControlsProps) {
   return (
     <div className="space-y-3">
@@ -96,6 +101,14 @@ export function ComposerControls({
 
       <Panel className="space-y-3 bg-surface p-3.5">
         <p className="text-xs font-semibold text-slate-200">Output</p>
+        <Field label="File name">
+          <TextInput
+            value={outputFileName}
+            disabled={disabled}
+            placeholder="combined"
+            onChange={(event) => onOutputFileNameChange(event.target.value)}
+          />
+        </Field>
         <Field label="Export path">
           <p className="truncate font-mono text-xs text-slate-400" title={outputPath ?? undefined}>
             {outputPath ?? 'Default videos folder'}

@@ -14,14 +14,21 @@ import {
 } from '../../../shared/imageEditing';
 import {
   BRANDING_ASPECT_RATIOS,
+  BRANDING_FONT_FAMILIES,
+  BRANDING_FONT_WEIGHTS,
+  BRANDING_LIMITS,
   OVERLAY_POSITIONS,
   type BrandingAspectRatio,
   type BrandingCanvasConfig,
+  type BrandingFontFamily,
+  type BrandingFontWeight,
   type OverlayPosition,
   type SideImageConfig,
+  type TextLogoConfig,
 } from '../../../shared/branding';
 
 const MAX_TEXT_PATH_LENGTH = 4096;
+const MAX_TEXT_LENGTH = 120;
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -56,6 +63,53 @@ function sanitizeOptionalString(value: unknown, fallback: string | null): string
   }
   const normalized = value.trim().slice(0, MAX_TEXT_PATH_LENGTH);
   return normalized.length > 0 ? normalized : null;
+}
+
+function sanitizeText(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  const trimmed = value.trim().slice(0, MAX_TEXT_LENGTH);
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function sanitizeOptionalText(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  return value.trim().slice(0, MAX_TEXT_LENGTH);
+}
+
+function sanitizeTextLogo(raw: unknown, defaults: TextLogoConfig): TextLogoConfig {
+  const source = (raw ?? {}) as Partial<TextLogoConfig>;
+  return {
+    text: sanitizeText(source.text, defaults.text),
+    secondaryText: sanitizeOptionalText(source.secondaryText, defaults.secondaryText),
+    fontFamily: sanitizeEnum<BrandingFontFamily>(
+      source.fontFamily,
+      BRANDING_FONT_FAMILIES,
+      defaults.fontFamily,
+    ),
+    fontSizePercent: clampNumber(
+      source.fontSizePercent,
+      BRANDING_LIMITS.textFontSizePercent.min,
+      BRANDING_LIMITS.textFontSizePercent.max,
+      defaults.fontSizePercent,
+    ),
+    secondaryFontSizePercent: clampNumber(
+      source.secondaryFontSizePercent,
+      BRANDING_LIMITS.secondaryTextFontSizePercent.min,
+      BRANDING_LIMITS.secondaryTextFontSizePercent.max,
+      defaults.secondaryFontSizePercent,
+    ),
+    fontWeight: sanitizeEnum<BrandingFontWeight>(
+      source.fontWeight,
+      BRANDING_FONT_WEIGHTS,
+      defaults.fontWeight,
+    ),
+    color: sanitizeHexColor(source.color, defaults.color),
+    shadow: typeof source.shadow === 'boolean' ? source.shadow : defaults.shadow,
+  };
 }
 
 function sanitizeSideImage(raw: unknown, fallback: SideImageConfig): SideImageConfig {
@@ -105,7 +159,9 @@ function sanitizeWatermark(raw: unknown): ImageEditWatermarkConfig {
   const defaults = DEFAULT_IMAGE_EDIT_CONFIG.watermark;
   return {
     enabled: source.enabled === true,
+    mode: source.mode === 'text' ? 'text' : 'image',
     imagePath: sanitizePath(source.imagePath) ?? defaults.imagePath,
+    text: sanitizeTextLogo(source.text, defaults.text),
     position: sanitizeEnum<OverlayPosition>(
       source.position,
       OVERLAY_POSITIONS,
@@ -224,11 +280,15 @@ export function validateImageEditConfig(config: ImageEditConfig): string | null 
   }
 
   if (config.watermark.enabled) {
-    if (!config.watermark.imagePath) {
-      return 'Select a watermark logo before rendering.';
-    }
-    if (!isSupportedImageEditExtension(config.watermark.imagePath)) {
-      return `Unsupported watermark format. Use ${SUPPORTED_IMAGE_EDIT_EXTENSIONS.join(', ')}.`;
+    if (config.watermark.mode === 'image') {
+      if (!config.watermark.imagePath) {
+        return 'Select a watermark logo before rendering.';
+      }
+      if (!isSupportedImageEditExtension(config.watermark.imagePath)) {
+        return `Unsupported watermark format. Use ${SUPPORTED_IMAGE_EDIT_EXTENSIONS.join(', ')}.`;
+      }
+    } else if (!config.watermark.text.text.trim()) {
+      return 'Enter primary text for the Text Logo watermark.';
     }
   }
 

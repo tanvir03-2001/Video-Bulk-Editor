@@ -61,7 +61,8 @@ export function useVideoComposer(otherJobActive: boolean) {
     currentData: branding,
     applyData: setBranding,
   });
-  const [outputPath, setOutputPath] = useState<string | null>(null);
+  const [outputFolder, setOutputFolder] = useState<string | null>(null);
+  const [outputFileName, setOutputFileName] = useState('combined');
   const [thumbnails, setThumbnails] = useState<Record<string, string[]>>({});
   const [proxyPaths, setProxyPaths] = useState<Record<string, string>>({});
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
@@ -127,6 +128,19 @@ export function useVideoComposer(otherJobActive: boolean) {
       }
     });
   }, [pushActivity]);
+
+  const outputPath = useMemo(() => {
+    if (!outputFolder) {
+      return null;
+    }
+    return joinOutputPath(outputFolder, outputFileName);
+  }, [outputFolder, outputFileName]);
+
+  const applyResolvedOutputPath = useCallback((resolved: string) => {
+    const parsed = parseOutputPath(resolved);
+    setOutputFolder(parsed.folder);
+    setOutputFileName(parsed.fileName);
+  }, []);
 
   const naturalVideoDurationSeconds = useMemo(
     () => videos.reduce((sum, video) => sum + Math.max(0.1, video.durationSeconds), 0),
@@ -253,8 +267,8 @@ export function useVideoComposer(otherJobActive: boolean) {
       if (!selectedClipId && nextClips[0]) {
         setSelectedClipId(nextClips[0].id);
       }
-      if (!outputPath) {
-        setOutputPath(await window.api.resolveComposerOutputPath());
+      if (!outputFolder) {
+        applyResolvedOutputPath(await window.api.resolveComposerOutputPath());
       }
 
       setStepActivity(2, `Generating thumbnails & proxy for ${enriched.length} video(s)…`);
@@ -278,11 +292,12 @@ export function useVideoComposer(otherJobActive: boolean) {
       setBusy(false);
     }
   }, [
+    applyResolvedOutputPath,
     audioDurationSeconds,
     audioPath,
     buildInitialClips,
     composerMode,
-    outputPath,
+    outputFolder,
     planTimeline,
     pushActivity,
     selectedClipId,
@@ -482,8 +497,12 @@ export function useVideoComposer(otherJobActive: boolean) {
   const selectOutputPath = useCallback(async () => {
     const selected = await window.api.selectBrandingOutputFolder();
     if (selected) {
-      setOutputPath(pathJoinOutput(selected));
+      setOutputFolder(selected);
     }
+  }, []);
+
+  const changeOutputFileName = useCallback((next: string) => {
+    setOutputFileName(next);
   }, []);
 
   const exportVideo = useCallback(async () => {
@@ -587,13 +606,14 @@ export function useVideoComposer(otherJobActive: boolean) {
     setProgress({ ...INITIAL_COMPOSER_PROGRESS, logs: [] });
 
     try {
-      setOutputPath(await window.api.resolveComposerOutputPath());
+      applyResolvedOutputPath(await window.api.resolveComposerOutputPath());
     } catch {
-      setOutputPath(null);
+      setOutputFolder(null);
+      setOutputFileName('combined');
     }
 
     pushActivity('info', 'New project started — saved settings profiles kept.');
-  }, [cancel, isWorking, pushActivity]);
+  }, [applyResolvedOutputPath, cancel, isWorking, pushActivity]);
   const idle = !isWorking && !busy && !otherJobActive;
   const ready =
     videos.length > 0 &&
@@ -632,6 +652,7 @@ export function useVideoComposer(otherJobActive: boolean) {
     branding,
     settingsProfiles,
     outputPath,
+    outputFileName,
     thumbnails,
     proxyPaths,
     selectedClipId,
@@ -724,14 +745,40 @@ export function useVideoComposer(otherJobActive: boolean) {
     selectLogoImage,
     selectSideImage,
     selectOutputPath,
+    changeOutputFileName,
     exportVideo,
     cancel,
     createNewProject,
   };
 }
 
-function pathJoinOutput(folder: string): string {
-  return `${folder.replace(/[\\/]+$/, '')}/combined-${Date.now()}.mp4`;
+function stripMp4Extension(name: string): string {
+  return name.replace(/\.mp4$/i, '');
+}
+
+function sanitizeOutputFileName(raw: string): string {
+  let name = raw
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+    .replace(/\.+$/, '');
+  name = stripMp4Extension(name).trim();
+  return name || 'combined';
+}
+
+function parseOutputPath(fullPath: string): { folder: string; fileName: string } {
+  const cleaned = fullPath.replace(/[\\/]+$/, '');
+  const match = cleaned.match(/^(.*)[/\\]([^/\\]+)$/);
+  if (!match) {
+    return { folder: '', fileName: stripMp4Extension(cleaned) || 'combined' };
+  }
+  return {
+    folder: match[1],
+    fileName: stripMp4Extension(match[2]) || 'combined',
+  };
+}
+
+function joinOutputPath(folder: string, fileName: string): string {
+  return `${folder.replace(/[\\/]+$/, '')}/${sanitizeOutputFileName(fileName)}.mp4`;
 }
 
 export type VideoComposerController = ReturnType<typeof useVideoComposer>;

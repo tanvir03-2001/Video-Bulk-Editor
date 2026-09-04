@@ -3,10 +3,13 @@ import {
   BRANDING_ASPECT_RATIOS,
   BRANDING_ASPECT_RATIO_LABELS,
   DEFAULT_BRANDING_CANVAS_CONFIG,
+  DEFAULT_TEXT_LOGO_CONFIG,
   type BrandingCanvasConfig,
   type BrandingSide,
   type OverlayPosition,
   type SideImageConfig,
+  type TextLogoConfig,
+  type WatermarkMode,
 } from './branding';
 
 export type ImageEditFilter =
@@ -55,7 +58,9 @@ export const IMAGE_EDIT_CROP_MODE_LABELS: Record<ImageEditCropMode, string> = {
 
 export interface ImageEditWatermarkConfig {
   enabled: boolean;
+  mode: WatermarkMode;
   imagePath: string | null;
+  text: TextLogoConfig;
   position: OverlayPosition;
   scalePercent: number;
   opacityPercent: number;
@@ -110,7 +115,9 @@ export const DEFAULT_IMAGE_EDIT_TUNING: ImageEditTuningConfig = {
 
 export const DEFAULT_IMAGE_EDIT_WATERMARK: ImageEditWatermarkConfig = {
   enabled: false,
+  mode: 'image',
   imagePath: null,
+  text: { ...DEFAULT_TEXT_LOGO_CONFIG },
   position: 'bottom-right',
   scalePercent: 15,
   opacityPercent: 80,

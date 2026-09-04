@@ -81,6 +81,10 @@ export function mergeImageEditConfig(
     watermark: {
       ...defaults.watermark,
       ...raw.watermark,
+      text: {
+        ...defaults.watermark.text,
+        ...raw.watermark?.text,
+      },
     },
   };
 }

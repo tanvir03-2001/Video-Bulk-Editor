@@ -204,6 +204,7 @@ export const ComposerWorkspace = memo(function ComposerWorkspace({
               branding={composer.branding}
               settingsProfiles={composer.settingsProfiles}
               outputPath={composer.outputPath}
+              outputFileName={composer.outputFileName}
               audioPath={composer.audioPath}
               disabled={!composer.canAddVideos}
               onUpdateClip={composer.updateClip}
@@ -222,6 +223,7 @@ export const ComposerWorkspace = memo(function ComposerWorkspace({
               onSelectOutputPath={() => {
                 void composer.selectOutputPath();
               }}
+              onOutputFileNameChange={composer.changeOutputFileName}
             />
             <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
               {videoOnly

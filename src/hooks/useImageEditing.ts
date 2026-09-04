@@ -166,6 +166,16 @@ export function useImageEditing(otherJobActive: boolean) {
     setConfig((current) => ({ ...current, watermark: { ...current.watermark, ...patch } }));
   }, []);
 
+  const updateWatermarkText = useCallback((patch: Partial<ImageEditConfig['watermark']['text']>) => {
+    setConfig((current) => ({
+      ...current,
+      watermark: {
+        ...current.watermark,
+        text: { ...current.watermark.text, ...patch },
+      },
+    }));
+  }, []);
+
   const applyPreset = useCallback((preset: ImageEditPresetSummary) => {
     setConfig((current) => ({
       ...current,
@@ -269,7 +279,7 @@ export function useImageEditing(otherJobActive: boolean) {
   const selectWatermark = useCallback(async () => {
     const selected = await window.api.selectBrandingLogo();
     if (selected) {
-      updateWatermark({ enabled: true, imagePath: selected });
+      updateWatermark({ enabled: true, mode: 'image', imagePath: selected });
     }
   }, [updateWatermark]);
 
@@ -309,7 +319,10 @@ export function useImageEditing(otherJobActive: boolean) {
     config.cropMode !== 'cover' ||
     config.outputFormat !== DEFAULT_IMAGE_EDIT_CONFIG.outputFormat ||
     config.qualityPercent !== DEFAULT_IMAGE_EDIT_CONFIG.qualityPercent;
-  const watermarkMissing = config.watermark.enabled && !config.watermark.imagePath;
+  const watermarkMissing =
+    config.watermark.enabled &&
+    ((config.watermark.mode === 'image' && !config.watermark.imagePath) ||
+      (config.watermark.mode === 'text' && !config.watermark.text.text.trim()));
   const sideImageMissing = sideImages.some((side) => side.enabled && !side.imagePath);
   const configReady = hasAdjustment && !watermarkMissing && !sideImageMissing;
   const previewSignature = JSON.stringify({ imagePath: previewImagePath, config });
@@ -412,6 +425,7 @@ export function useImageEditing(otherJobActive: boolean) {
     updateSideImage,
     updateTuning,
     updateWatermark,
+    updateWatermarkText,
     applyPreset,
     togglePresetFavorite,
     loadPresetPreview,

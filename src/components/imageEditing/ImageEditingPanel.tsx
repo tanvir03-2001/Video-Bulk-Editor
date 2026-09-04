@@ -8,12 +8,9 @@ import {
   type ImageEditConfig,
   type ImageEditPresetSummary,
 } from '../../../shared/imageEditing';
-import {
-  OVERLAY_POSITIONS,
-  type BrandingAspectRatio,
-  type BrandingSide,
-} from '../../../shared/branding';
+import { type BrandingAspectRatio, type BrandingSide } from '../../../shared/branding';
 import type { ImageEditingController } from '../../hooks/useImageEditing';
+import { WatermarkSettings } from '../branding/WatermarkSettings';
 import { SettingsProfilePicker } from '../settings/SettingsProfilePicker';
 import { Badge, Button, controlBase, Icon, Panel } from '../ui/ui';
 
@@ -190,74 +187,20 @@ export function ImageEditingPanel({ editor }: { editor: ImageEditingController }
       <div className="grid gap-3 xl:grid-cols-2">
         <Panel className="space-y-3 bg-surface p-3.5">
           <div>
-            <p className="text-sm font-semibold text-slate-100">Watermark logo</p>
+            <p className="text-sm font-semibold text-slate-100">Watermark</p>
             <p className="mt-0.5 text-xs text-slate-500">
-              Place a logo above the edited image and any side bands.
+              Place an image or text logo above the edited image and any side bands.
             </p>
           </div>
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-200">
-            <input
-              type="checkbox"
-              checked={editor.config.watermark.enabled}
-              disabled={disabled}
-              onChange={(event) => editor.updateWatermark({ enabled: event.target.checked })}
-              className="h-3.5 w-3.5 accent-accent disabled:opacity-40"
-            />
-            Enable watermark
-          </label>
-          <Button
-            size="sm"
-            variant="secondary"
-            icon="image"
+          <WatermarkSettings
+            bare
+            config={editor.config.watermark}
             disabled={disabled}
-            onClick={() => {
+            onChange={editor.updateWatermark}
+            onTextChange={editor.updateWatermarkText}
+            onSelectLogo={() => {
               void editor.selectWatermark();
             }}
-            className="w-full"
-          >
-            {editor.config.watermark.imagePath ? 'Change logo' : 'Choose logo'}
-          </Button>
-          <p className="truncate font-mono text-[10px] text-slate-500" title={editor.config.watermark.imagePath ?? undefined}>
-            {editor.config.watermark.imagePath ?? 'No logo selected'}
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-slate-500">
-              Position
-              <select
-                value={editor.config.watermark.position}
-                disabled={disabled}
-                onChange={(event) => editor.updateWatermark({ position: event.target.value as ImageEditConfig['watermark']['position'] })}
-                className={`mt-1 ${inputBase}`}
-              >
-                {OVERLAY_POSITIONS.map((position) => (
-                  <option key={position} value={position}>
-                    {position.replace('-', ' ')}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <RangeField
-              id="image-edit-watermark-scale"
-              label="Scale"
-              value={editor.config.watermark.scalePercent}
-              suffix="%"
-              min={IMAGE_EDIT_LIMITS.watermarkScalePercent.min}
-              max={IMAGE_EDIT_LIMITS.watermarkScalePercent.max}
-              step={IMAGE_EDIT_LIMITS.watermarkScalePercent.step}
-              disabled={disabled}
-              onChange={(value) => editor.updateWatermark({ scalePercent: value })}
-            />
-          </div>
-          <RangeField
-            id="image-edit-watermark-opacity"
-            label="Opacity"
-            value={editor.config.watermark.opacityPercent}
-            suffix="%"
-            min={IMAGE_EDIT_LIMITS.watermarkOpacityPercent.min}
-            max={IMAGE_EDIT_LIMITS.watermarkOpacityPercent.max}
-            step={IMAGE_EDIT_LIMITS.watermarkOpacityPercent.step}
-            disabled={disabled}
-            onChange={(value) => editor.updateWatermark({ opacityPercent: value })}
           />
         </Panel>
 

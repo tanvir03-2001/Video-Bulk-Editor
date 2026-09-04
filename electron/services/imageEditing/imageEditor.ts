@@ -17,6 +17,7 @@ import {
   type CanvasLayout,
   type ImageDimensions,
 } from '../branding/canvasLayout';
+import { renderTextOverlayAsset } from '../branding/overlayAssets';
 
 export interface ImageEditResult {
   outputPath: string;
@@ -290,11 +291,36 @@ async function buildComposite(
     }
   }
 
-  composite = composite.composite(layers);
+  if (config.watermark.enabled) {
+    let watermarkPath: string;
+    if (config.watermark.mode === 'text') {
+      watermarkPath = await renderTextOverlayAsset({
+        text: config.watermark.text.text,
+        secondaryText: config.watermark.text.secondaryText,
+        fontFamily: config.watermark.text.fontFamily,
+        fontWeight: config.watermark.text.fontWeight,
+        color: config.watermark.text.color,
+        fontSizePx: Math.max(
+          8,
+          Math.round((layout.outputHeight * config.watermark.text.fontSizePercent) / 100),
+        ),
+        secondaryFontSizePx: Math.max(
+          4,
+          Math.round((layout.outputHeight * config.watermark.text.secondaryFontSizePercent) / 100),
+        ),
+        maxWidthPx: Math.round(layout.outputWidth * 0.9),
+        shadow: config.watermark.text.shadow,
+      });
+    } else {
+      if (!config.watermark.imagePath) {
+        throw new Error('No watermark logo selected');
+      }
+      await fs.access(config.watermark.imagePath);
+      watermarkPath = config.watermark.imagePath;
+    }
 
-  if (config.watermark.enabled && config.watermark.imagePath) {
     const watermark = await applyOpacity(
-      config.watermark.imagePath,
+      watermarkPath,
       config.watermark.opacityPercent,
       Math.max(2, Math.round((layout.outputWidth * config.watermark.scalePercent) / 100)),
     );
@@ -306,10 +332,11 @@ async function buildComposite(
       watermark.height,
       Math.round((layout.outputWidth * config.watermark.marginPercent) / 100),
     );
-    composite = composite.composite([
-      { input: watermark.buffer, left: position.left, top: position.top },
-    ]);
+    layers.push({ input: watermark.buffer, left: position.left, top: position.top });
   }
+
+  // Sharp 0.35 only keeps the last .composite() call — put every layer in one pass.
+  composite = composite.composite(layers);
 
   return { image: composite, layout };
 }
