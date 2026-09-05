@@ -1,5 +1,5 @@
 import type { BrandingConfig } from '../../shared/branding';
-import { DEFAULT_BRANDING_CONFIG } from '../../shared/branding';
+import { DEFAULT_BRANDING_CONFIG, SUBTITLE_DESIGN_IDS } from '../../shared/branding';
 import type { ImageEditConfig } from '../../shared/imageEditing';
 import { DEFAULT_IMAGE_EDIT_CONFIG } from '../../shared/imageEditing';
 
@@ -51,6 +51,16 @@ export function mergeBrandingConfig(
     subtitles: {
       ...defaults.subtitles,
       ...raw.subtitles,
+      designId: (SUBTITLE_DESIGN_IDS as readonly string[]).includes(
+        raw.subtitles?.designId as string,
+      )
+        ? (raw.subtitles!.designId as BrandingConfig['subtitles']['designId'])
+        : defaults.subtitles.designId,
+      focusColor:
+        typeof raw.subtitles?.focusColor === 'string' &&
+        /^#[0-9a-fA-F]{6}$/.test(raw.subtitles.focusColor.trim())
+          ? raw.subtitles.focusColor.trim()
+          : defaults.subtitles.focusColor,
     },
   };
 }

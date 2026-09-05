@@ -56,8 +56,8 @@ interface TextLogoCssLockupProps {
 
 /**
  * Live CSS preview for text watermarks.
- * Matches export: render primary/secondary at height-% font sizes, then scale the
- * whole lockup so its width equals scalePercent of the frame.
+ * Renders primary/secondary at height-% font sizes. Logo Size is a max-width
+ * cap (does not force-shrink the lockup), so secondary text stays legible.
  */
 export function TextLogoCssLockup({ config, className = '', style }: TextLogoCssLockupProps) {
   const frameRef = useRef<HTMLDivElement>(null);
@@ -79,8 +79,8 @@ export function TextLogoCssLockup({ config, className = '', style }: TextLogoCss
       if (naturalWidth <= 0 || frame.clientWidth <= 0) {
         return;
       }
-      const targetWidth = frame.clientWidth * (config.scalePercent / 100);
-      setScale(Math.max(0.05, targetWidth / naturalWidth));
+      const maxWidth = frame.clientWidth * (config.scalePercent / 100);
+      setScale(naturalWidth > maxWidth ? Math.max(0.05, maxWidth / naturalWidth) : 1);
     };
 
     update();

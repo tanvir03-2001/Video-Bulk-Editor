@@ -4,6 +4,7 @@ import { CanvasSettings } from './CanvasSettings';
 import { MovingTextSettings } from './MovingTextSettings';
 import { SideImagesSettings } from './SideImagesSettings';
 import { SubtitlesPositionControls } from './SubtitlesPositionControls';
+import { SubtitleDesignPicker } from './SubtitleDesignPicker';
 import { WatermarkSettings } from './WatermarkSettings';
 import { PresetPicker } from '../imageEditing/PresetPicker';
 import { Badge, Button, CheckboxField, Panel } from '../ui/ui';
@@ -84,13 +85,18 @@ export function VideoBrandingPanel({ branding }: VideoBrandingPanelProps) {
         />
         <Panel className="space-y-2.5 bg-surface p-3.5">
           <CheckboxField
-            label="English reels subtitles (Local Whisper)"
+            label="English subtitles (Local Whisper)"
             checked={branding.config.subtitles.enabled}
             disabled={settingsDisabled}
             onChange={(enabled) => {
               branding.updateSubtitles({ enabled });
             }}
             hint="Extracts speech from each video's audio and burns modern word-by-word captions."
+          />
+          <SubtitleDesignPicker
+            value={branding.config.subtitles}
+            disabled={settingsDisabled}
+            onChange={branding.updateSubtitles}
           />
           <SubtitlesPositionControls
             value={branding.config.subtitles}

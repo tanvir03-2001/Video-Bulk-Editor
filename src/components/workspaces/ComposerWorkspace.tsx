@@ -41,7 +41,7 @@ export const ComposerWorkspace = memo(function ComposerWorkspace({
             void composer.createNewProject();
           }}
           disabled={!composer.canCreateNew}
-          title="Clear videos, audio, and timeline. Saved settings profiles stay intact."
+          title="Clear all video/audio file references and timeline. Mode & branding settings stay saved."
         >
           New Project
         </Button>
@@ -53,6 +53,7 @@ export const ComposerWorkspace = memo(function ComposerWorkspace({
             void composer.addVideos();
           }}
           disabled={!composer.canAddVideos}
+          title="Pick videos one by one — first Open = first on timeline. Cancel when done."
         >
           Add Videos
         </Button>
@@ -255,7 +256,12 @@ export const ComposerWorkspace = memo(function ComposerWorkspace({
               <ComposerAssetStrip
                 videos={composer.videos}
                 thumbnails={composer.thumbnails}
+                selectedVideoPath={
+                  composer.clips.find((clip) => clip.id === composer.selectedClipId)?.sourcePath ??
+                  null
+                }
                 disabled={!composer.canAddVideos}
+                onSelectVideo={composer.selectVideo}
                 onRemoveVideo={(videoPath) => {
                   void composer.removeVideo(videoPath);
                 }}
@@ -270,7 +276,7 @@ export const ComposerWorkspace = memo(function ComposerWorkspace({
                 playheadSeconds={composer.playheadSeconds}
                 isPlaying={composer.isPreviewPlaying}
                 pixelsPerSecond={composer.timelineZoom}
-                onSelectClip={composer.setSelectedClipId}
+                onSelectClip={composer.selectClip}
                 onReorderClip={composer.reorderClip}
                 onRemoveClip={(clipId) => {
                   void composer.removeClip(clipId);

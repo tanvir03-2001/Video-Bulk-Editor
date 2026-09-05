@@ -62,6 +62,32 @@ function buildPrimaryClips(videos: PlannerVideoInput[]): ComposerClip[] {
 }
 
 /**
+ * Keep primary clips in the same order as the uploaded/selected videos list
+ * (first selected video stays first on the timeline).
+ */
+function orderPrimaryClipsByVideoList(
+  clips: ComposerClip[],
+  videos: PlannerVideoInput[],
+): ComposerClip[] {
+  if (clips.length === 0) {
+    return clips;
+  }
+
+  const remaining = [...clips].sort((a, b) => a.timelineOffset - b.timelineOffset);
+  const ordered: ComposerClip[] = [];
+
+  for (const video of videos) {
+    const index = remaining.findIndex((clip) => clip.sourcePath === video.path);
+    if (index >= 0) {
+      ordered.push(remaining.splice(index, 1)[0]);
+    }
+  }
+
+  ordered.push(...remaining);
+  return ordered;
+}
+
+/**
  * Append short cuts from source videos (round-robin, staggered offsets) until
  * effective timeline duration reaches the target. No freeze frames.
  */
@@ -198,9 +224,10 @@ export async function buildComposerTimeline(
 
   const baseClips =
     userClips && userClips.length > 0
-      ? [...userClips]
-          .filter((clip) => !clip.isFiller && !clip.isPadImage)
-          .sort((a, b) => a.timelineOffset - b.timelineOffset)
+      ? orderPrimaryClipsByVideoList(
+          [...userClips].filter((clip) => !clip.isFiller && !clip.isPadImage),
+          videos,
+        )
       : buildPrimaryClips(videos);
 
   const primary =

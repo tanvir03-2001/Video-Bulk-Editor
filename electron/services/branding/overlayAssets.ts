@@ -190,7 +190,7 @@ async function rasterizeSingleLineSvg(options: {
 
 /**
  * Match the CSS preview lockup: primary on top, secondary smaller and right-aligned
- * underneath within the same width as the primary line.
+ * underneath. Canvas width fits the wider of the two lines.
  */
 async function rasterizeTextLockup(options: TextAssetOptions): Promise<RasterizedText> {
   const fontSize = emSizeFor(options.fontSizePx);
@@ -218,7 +218,7 @@ async function rasterizeTextLockup(options: TextAssetOptions): Promise<Rasterize
   });
 
   const gap = Math.max(1, Math.round(primary.height * 0.06));
-  const lockupWidth = primary.width;
+  const lockupWidth = Math.max(primary.width, secondary.width);
   const lockupHeight = primary.height + gap + secondary.height;
   const secondaryLeft = Math.max(0, lockupWidth - secondary.width);
 
@@ -280,10 +280,13 @@ async function rasterizeWithDrawtext(options: TextAssetOptions): Promise<Rasteri
   const primaryWidthEstimate = Math.ceil(fontSize * 0.72 * options.text.length + padding * 2);
   const primaryHeightEstimate = Math.ceil(fontSize * 1.45 + padding * 2);
   const gap = Math.max(1, Math.round(primaryHeightEstimate * 0.06));
+  const secondaryWidthEstimate = secondaryText
+    ? Math.ceil(secondaryFontSize * 0.72 * secondaryText.length + padding * 2)
+    : 0;
   const secondaryHeightEstimate = secondaryText
     ? Math.ceil(secondaryFontSize * 1.45 + padding)
     : 0;
-  const canvasWidth = primaryWidthEstimate;
+  const canvasWidth = Math.max(primaryWidthEstimate, secondaryWidthEstimate);
   const canvasHeight = primaryHeightEstimate + (secondaryText ? gap + secondaryHeightEstimate : 0);
   const dir = await getCacheDir();
   const outputPath = path.join(dir, `drawtext-${hashOptions(options)}.png`);

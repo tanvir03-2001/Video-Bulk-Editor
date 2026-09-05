@@ -5,11 +5,14 @@ import path from 'node:path';
 import {
   BRANDING_LIMITS,
   DEFAULT_BRANDING_SUBTITLES,
+  DEFAULT_SUBTITLE_DESIGN_ID,
+  DEFAULT_SUBTITLE_FOCUS_COLOR,
   SUBTITLE_PLAY_RES,
   type BrandingSubtitlesConfig,
+  type SubtitleDesignId,
 } from '../../../shared/branding';
 import { getFfmpegPath, toFfmpegPath } from '../ffmpegPaths';
-import { ProcessingCancelledError } from '../frameGenerator';
+import { getVideoDurationSeconds, ProcessingCancelledError } from '../frameGenerator';
 import { runFfmpegProcess } from '../branding/ffmpegProcess';
 import {
   runWhisperTranscription,
@@ -29,9 +32,16 @@ export interface SubtitleCue {
 }
 
 const WORDS_PER_CUE = 3;
-/** Whisper often stretches the final token end; keep on-screen holds realistic. */
-const MAX_WORD_HOLD_SECONDS = 0.85;
 const MIN_WORD_HOLD_SECONDS = 0.12;
+/**
+ * Last spoken word: hold longer so the final seconds of the video are not blank
+ * after Whisper's short end timestamp.
+ */
+const LAST_WORD_HOLD_SECONDS = 3.0;
+/** If the last word starts inside this window before EOF, pin its end to media EOF. */
+const FINAL_CAPTION_FILL_SECONDS = 4.0;
+/** Drop/clamp cues that would land at or past media EOF (avoids invisible last lines). */
+const CUE_END_EPSILON_SECONDS = 0.02;
 
 type AsrChunk = WhisperAsrChunk;
 
@@ -140,10 +150,11 @@ export function refineWordTimings(words: SubtitleWord[]): SubtitleWord[] {
       // Snap to next word start — avoids Whisper's stretched token ends.
       end = next.startSeconds;
     } else {
-      end = Math.min(
-        Number.isFinite(current.endSeconds) ? current.endSeconds : start + MAX_WORD_HOLD_SECONDS,
-        start + MAX_WORD_HOLD_SECONDS,
-      );
+      // Last word: allow a longer hold so trailing seconds keep a caption on screen.
+      const whisperEnd = Number.isFinite(current.endSeconds)
+        ? current.endSeconds
+        : start + LAST_WORD_HOLD_SECONDS;
+      end = Math.min(Math.max(whisperEnd, start + MIN_WORD_HOLD_SECONDS), start + LAST_WORD_HOLD_SECONDS);
     }
 
     end = Math.max(start + MIN_WORD_HOLD_SECONDS, end);
@@ -187,6 +198,25 @@ function escapeAssText(text: string): string {
   return text.replace(/[{}\\]/g, '');
 }
 
+/** CSS #RRGGBB → ASS &HAABBGGRR (opaque). */
+export function hexToAssColour(hex: string, fallback = DEFAULT_SUBTITLE_FOCUS_COLOR): string {
+  const candidate = /^#([0-9a-fA-F]{6})$/.exec(hex.trim())?.[1]
+    ?? /^#([0-9a-fA-F]{6})$/.exec(fallback.trim())?.[1]
+    ?? '00FFFF';
+  const r = candidate.slice(0, 2);
+  const g = candidate.slice(2, 4);
+  const b = candidate.slice(4, 6);
+  return `&H00${b}${g}${r}`.toUpperCase();
+}
+
+function resolveFocusAssColour(position?: Partial<BrandingSubtitlesConfig>): string {
+  const hex =
+    typeof position?.focusColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(position.focusColor.trim())
+      ? position.focusColor.trim()
+      : DEFAULT_BRANDING_SUBTITLES.focusColor;
+  return hexToAssColour(hex);
+}
+
 export function resolveSubtitlePlayPosition(position?: Partial<BrandingSubtitlesConfig>): {
   x: number;
   y: number;
@@ -212,9 +242,11 @@ export function resolveSubtitlePlayPosition(position?: Partial<BrandingSubtitles
 export function buildReelsAss(
   cues: SubtitleCue[],
   position?: Partial<BrandingSubtitlesConfig>,
+  maxEndSeconds?: number,
 ): string {
   const { x: posX, y: posY } = resolveSubtitlePlayPosition(position);
   const posTag = `{\\pos(${posX},${posY})}`;
+  const focusAss = resolveFocusAssColour(position);
 
   const header = `[Script Info]
 ScriptType: v4.00+
@@ -225,48 +257,210 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Reels,Arial Black,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,0,2,40,40,220,1
+Style: Reels,Arial Black,72,&H00FFFFFF,${focusAss},&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,0,5,40,40,220,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
+  const events = buildKaraokeDialogueEvents(
+    cues,
+    'Reels',
+    posTag,
+    (escaped, isActive) => {
+      const text = escaped.toUpperCase();
+      return isActive
+        ? `{\\c${focusAss}\\b1}${text}{\\c&H00FFFFFF&\\b0}`
+        : text;
+    },
+    maxEndSeconds,
+  );
+
+  return `${header}${events}\n`;
+}
+
+/**
+ * Cinematic kinetic ASS: heavy condensed type, focus-coloured active keyword
+ * with scale pop (overshoot via \\t), white surrounding words, tight spacing.
+ */
+export function buildCinematicKineticAss(
+  cues: SubtitleCue[],
+  position?: Partial<BrandingSubtitlesConfig>,
+  maxEndSeconds?: number,
+): string {
+  const { x: posX, y: posY } = resolveSubtitlePlayPosition(position);
+  const posTag = `{\\pos(${posX},${posY})}`;
+  const focusAss = resolveFocusAssColour(position);
+
+  const header = `[Script Info]
+ScriptType: v4.00+
+PlayResX: ${SUBTITLE_PLAY_RES.x}
+PlayResY: ${SUBTITLE_PLAY_RES.y}
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Kinetic,Impact,78,&H00FFFFFF,${focusAss},&H00000000,&H80000000,-1,0,0,0,100,100,-2,0,1,5,1,5,40,40,220,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+
+  const events = buildKaraokeDialogueEvents(
+    cues,
+    'Kinetic',
+    posTag,
+    (escaped, isActive) => {
+      const text = escaped.toUpperCase();
+      return isActive
+        ? `{\\fscx72\\fscy72\\c${focusAss}\\b1\\t(0,110,\\fscx132\\fscy132)\\t(110,220,\\fscx116\\fscy116)}${text}{\\fscx100\\fscy100\\c&H00FFFFFF&\\b0}`
+        : text;
+    },
+    maxEndSeconds,
+  );
+
+  return `${header}${events}\n`;
+}
+
+export function buildSubtitlesAss(
+  cues: SubtitleCue[],
+  position?: Partial<BrandingSubtitlesConfig>,
+  maxEndSeconds?: number,
+): string {
+  const designId: SubtitleDesignId =
+    position?.designId === 'cinematic-kinetic' ? 'cinematic-kinetic' : DEFAULT_SUBTITLE_DESIGN_ID;
+  return designId === 'cinematic-kinetic'
+    ? buildCinematicKineticAss(cues, position, maxEndSeconds)
+    : buildReelsAss(cues, position, maxEndSeconds);
+}
+
+/**
+ * Drop cues that start at/after media EOF and clamp word ends so last captions stay visible.
+ */
+export function clampCuesToMediaDuration(
+  cues: SubtitleCue[],
+  mediaDurationSeconds: number,
+  epsilonSeconds = CUE_END_EPSILON_SECONDS,
+): SubtitleCue[] {
+  const maxEnd = Math.max(0, mediaDurationSeconds - epsilonSeconds);
+  if (!(maxEnd > 0)) {
+    return [];
+  }
+
+  const clamped: SubtitleCue[] = [];
+  for (const cue of cues) {
+    if (cue.startSeconds >= maxEnd) {
+      continue;
+    }
+    const words = cue.words
+      .filter((word) => word.startSeconds < maxEnd)
+      .map((word) => {
+        const startSeconds = Math.max(0, Math.min(word.startSeconds, maxEnd));
+        const endSeconds = Math.max(
+          startSeconds + MIN_WORD_HOLD_SECONDS,
+          Math.min(word.endSeconds, maxEnd),
+        );
+        return {
+          ...word,
+          startSeconds,
+          endSeconds: Math.min(endSeconds, maxEnd),
+        };
+      })
+      .filter((word) => word.startSeconds < maxEnd);
+
+    if (words.length === 0) {
+      continue;
+    }
+
+    clamped.push({
+      words,
+      startSeconds: words[0].startSeconds,
+      endSeconds: Math.min(Math.max(cue.endSeconds, words[words.length - 1].endSeconds), maxEnd),
+    });
+  }
+  return clamped;
+}
+
+function resolveWordHighlightEnd(
+  word: SubtitleWord,
+  flatWords: SubtitleWord[],
+  maxEndSeconds?: number,
+): number {
+  const globalIndex = flatWords.findIndex(
+    (candidate) =>
+      candidate === word ||
+      (candidate.startSeconds === word.startSeconds &&
+        candidate.endSeconds === word.endSeconds &&
+        candidate.text === word.text),
+  );
+  const nextWord =
+    globalIndex >= 0 && globalIndex < flatWords.length - 1
+      ? flatWords[globalIndex + 1]
+      : undefined;
+  const isLastWord = !nextWord;
+  let end: number;
+  if (!isLastWord) {
+    const highlightEnd = Math.max(word.startSeconds + MIN_WORD_HOLD_SECONDS, nextWord.startSeconds);
+    end = Math.max(word.startSeconds + MIN_WORD_HOLD_SECONDS, highlightEnd);
+  } else {
+    // Keep the final karaoke event on screen through the end of speech / near EOF.
+    const naturalEnd = Number.isFinite(word.endSeconds)
+      ? word.endSeconds
+      : word.startSeconds + LAST_WORD_HOLD_SECONDS;
+    end = Math.max(
+      word.startSeconds + MIN_WORD_HOLD_SECONDS,
+      Math.min(naturalEnd, word.startSeconds + LAST_WORD_HOLD_SECONDS),
+    );
+    if (typeof maxEndSeconds === 'number' && Number.isFinite(maxEndSeconds) && maxEndSeconds > word.startSeconds) {
+      const holdTo = Math.min(maxEndSeconds, word.startSeconds + LAST_WORD_HOLD_SECONDS);
+      end = Math.max(end, holdTo);
+      if (word.startSeconds >= maxEndSeconds - FINAL_CAPTION_FILL_SECONDS) {
+        end = maxEndSeconds;
+      }
+    }
+  }
+  if (typeof maxEndSeconds === 'number' && Number.isFinite(maxEndSeconds) && maxEndSeconds > 0) {
+    end = Math.min(end, maxEndSeconds);
+  }
+  return end;
+}
+
+function buildKaraokeDialogueEvents(
+  cues: SubtitleCue[],
+  styleName: string,
+  posTag: string,
+  renderWord: (escaped: string, isActive: boolean) => string,
+  maxEndSeconds?: number,
+): string {
   const flatWords = cues.flatMap((cue) => cue.words);
-  const events = cues
+  return cues
     .map((cue) =>
       cue.words
         .map((word, activeIndex) => {
+          if (
+            typeof maxEndSeconds === 'number' &&
+            Number.isFinite(maxEndSeconds) &&
+            word.startSeconds >= maxEndSeconds
+          ) {
+            return null;
+          }
           const rendered = cue.words
-            .map((candidate, index) => {
-              const escaped = escapeAssText(candidate.text);
-              return index === activeIndex
-                ? `{\\c&H00FFFF&\\b1}${escaped}{\\c&HFFFFFF&\\b0}`
-                : escaped;
-            })
+            .map((candidate, index) =>
+              renderWord(escapeAssText(candidate.text), index === activeIndex),
+            )
             .join(' ');
-
-          const globalIndex = flatWords.findIndex(
-            (candidate) =>
-              candidate === word ||
-              (candidate.startSeconds === word.startSeconds &&
-                candidate.endSeconds === word.endSeconds &&
-                candidate.text === word.text),
-          );
-          const nextWord =
-            globalIndex >= 0 && globalIndex < flatWords.length - 1
-              ? flatWords[globalIndex + 1]
-              : undefined;
-          const highlightEnd = nextWord
-            ? Math.max(word.startSeconds + MIN_WORD_HOLD_SECONDS, nextWord.startSeconds)
-            : Math.min(word.endSeconds, word.startSeconds + MAX_WORD_HOLD_SECONDS);
-          const end = Math.max(word.startSeconds + MIN_WORD_HOLD_SECONDS, highlightEnd);
-          return `Dialogue: 0,${formatAssTime(word.startSeconds)},${formatAssTime(end)},Reels,,0,0,0,,${posTag}${rendered}`;
+          const end = resolveWordHighlightEnd(word, flatWords, maxEndSeconds);
+          if (end <= word.startSeconds) {
+            return null;
+          }
+          return `Dialogue: 0,${formatAssTime(word.startSeconds)},${formatAssTime(end)},${styleName},,0,0,0,,${posTag}${rendered}`;
         })
+        .filter((line): line is string => Boolean(line))
         .join('\n'),
     )
+    .filter((block) => block.length > 0)
     .join('\n');
-
-  return `${header}${events}\n`;
 }
 
 export async function transcribeEnglish(options: {
@@ -317,6 +511,11 @@ export async function generateEnglishSubtitlesAss(options: {
   registerChild?: (child: ChildProcess | null) => void;
   /** Shift all cue times forward (e.g. soundtrack adelay on combiner timeline). */
   timelineOffsetSeconds?: number;
+  /**
+   * When set, probe this file for EOF clamping (e.g. burn-target video) instead
+   * of mediaPath (which may be a shorter soundtrack file).
+   */
+  clampToMediaPath?: string;
   /** Caption placement; defaults match legacy bottom-center MarginV 220. */
   position?: Partial<BrandingSubtitlesConfig>;
 }): Promise<string | null> {
@@ -359,8 +558,35 @@ export async function generateEnglishSubtitlesAss(options: {
           }))
         : cues;
 
-    options.onStatus?.('Building reels captions');
-    const ass = buildReelsAss(shiftedCues, options.position);
+    const durationProbePath = options.clampToMediaPath ?? options.mediaPath;
+    let mediaDurationSeconds: number | null = null;
+    try {
+      mediaDurationSeconds = await getVideoDurationSeconds(
+        durationProbePath,
+        options.shouldCancel,
+        options.registerChild,
+      );
+    } catch {
+      // Duration probe is best-effort; still build captions without EOF clamp.
+    }
+
+    const maxEndSeconds =
+      mediaDurationSeconds != null && mediaDurationSeconds > 0
+        ? Math.max(0, mediaDurationSeconds - CUE_END_EPSILON_SECONDS)
+        : undefined;
+
+    const timedCues =
+      maxEndSeconds != null
+        ? clampCuesToMediaDuration(shiftedCues, mediaDurationSeconds!, CUE_END_EPSILON_SECONDS)
+        : shiftedCues;
+
+    if (timedCues.length === 0) {
+      options.onStatus?.('No English speech detected');
+      return null;
+    }
+
+    options.onStatus?.('Building captions');
+    const ass = buildSubtitlesAss(timedCues, options.position, maxEndSeconds);
     await fs.writeFile(assPath, ass, 'utf8');
 
     // Keep ASS outside the temp cleanup by copying to a sibling that caller owns.

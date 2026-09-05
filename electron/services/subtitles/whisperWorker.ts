@@ -101,14 +101,35 @@ function getAsrPipeline(
 
 async function readWavAsFloat32(wavPath: string): Promise<Float32Array> {
   const buffer = await fs.readFile(wavPath);
-  const dataOffset = buffer.length > 44 && buffer.toString('ascii', 0, 4) === 'RIFF' ? 44 : 0;
+  const dataOffset = findWavDataOffset(buffer);
   const sampleCount = Math.floor((buffer.length - dataOffset) / 2);
-  const samples = new Float32Array(sampleCount);
-  for (let index = 0; index < sampleCount; index += 1) {
+  const samples = new Float32Array(Math.max(0, sampleCount));
+  for (let index = 0; index < samples.length; index += 1) {
     const int16 = buffer.readInt16LE(dataOffset + index * 2);
     samples[index] = int16 / 32768;
   }
   return samples;
+}
+
+/**
+ * Locate PCM payload after RIFF chunks. Assuming a fixed 44-byte header
+ * mis-parses ffmpeg WAVs with larger fmt chunks and skews late timestamps.
+ */
+function findWavDataOffset(buffer: Buffer): number {
+  if (buffer.length < 44 || buffer.toString('ascii', 0, 4) !== 'RIFF') {
+    return 0;
+  }
+  let offset = 12;
+  while (offset + 8 <= buffer.length) {
+    const id = buffer.toString('ascii', offset, offset + 4);
+    const size = buffer.readUInt32LE(offset + 4);
+    if (id === 'data') {
+      return offset + 8;
+    }
+    // Chunk sizes are even-padded.
+    offset += 8 + size + (size % 2);
+  }
+  return 44;
 }
 
 async function handleWarmup(cacheDir: string | null): Promise<void> {
@@ -123,12 +144,21 @@ async function handleTranscribe(message: Extract<WorkerInbound, { type: 'transcr
 
   post({ type: 'status', id: message.id, message: 'Transcribing English speech…' });
   const audio = await readWavAsFloat32(message.wavPath);
-  const result = await asr(audio, {
+  const durationSeconds = audio.length / 16000;
+  // Chunk boundaries cause progressive timestamp drift (start OK, end wrong).
+  // Skip chunking for typical short-form / mid-length clips; otherwise use
+  // larger chunks and disable previous-text conditioning to stop cascade errors.
+  const asrOptions: Record<string, unknown> = {
     sampling_rate: 16000,
     return_timestamps: 'word',
-    chunk_length_s: 20,
-    stride_length_s: 4,
-  });
+    condition_on_previous_text: false,
+  };
+  if (durationSeconds > 90) {
+    asrOptions.chunk_length_s = 30;
+    asrOptions.stride_length_s = 5;
+  }
+
+  const result = await asr(audio, asrOptions);
 
   post({
     type: 'result',

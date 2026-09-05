@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   COMPOSER_AUDIO_DELAY_SECONDS,
   COMPOSER_DEFAULT_VOLUME_PERCENT,
@@ -24,6 +24,7 @@ import {
 import type { LogEntry } from '../../shared/ipc';
 import { mergeBrandingConfig } from '../utils/mergeSettingsConfig';
 import { getInitialSettingsData } from '../utils/settingsProfileStorage';
+import { loadComposerPrefs, saveComposerMode } from '../utils/composerPrefsStorage';
 import { useSettingsProfiles } from './useSettingsProfiles';
 import { createDefaultComposerBranding } from '../../shared/composer';
 
@@ -47,7 +48,9 @@ export function useVideoComposer(otherJobActive: boolean) {
   const [videos, setVideos] = useState<ComposerVideoItem[]>([]);
   const [audioPath, setAudioPath] = useState<string | null>(null);
   const [audioDurationSeconds, setAudioDurationSeconds] = useState(0);
-  const [composerMode, setComposerMode] = useState<ComposerMode>('video-plus-audio');
+  const [composerMode, setComposerMode] = useState<ComposerMode>(
+    () => loadComposerPrefs().composerMode,
+  );
   const [customDurationSeconds, setCustomDurationSeconds] = useState<number | null>(null);
   const [padImagePath, setPadImagePath] = useState<string | null>(null);
   const [clips, setClips] = useState<ComposerClip[]>([]);
@@ -234,55 +237,136 @@ export function useVideoComposer(otherJobActive: boolean) {
     [composerMode, customDurationSeconds, padImagePath, setStepActivity],
   );
 
-  const addVideos = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    setTimelinePlanned(false);
-    setStepActivity(1, 'Selecting videos…');
-    try {
-      const selected = await window.api.selectComposerVideos();
-      if (selected.length === 0) {
-        setActivityMessage(null);
+  const videosRef = useRef(videos);
+  const clipsRef = useRef(clips);
+  videosRef.current = videos;
+  clipsRef.current = clips;
+
+  const importEnrichedVideos = useCallback(
+    async (enriched: ComposerVideoItem[]) => {
+      if (enriched.length === 0) {
         return;
       }
 
-      setStepActivity(1, `Reading ${selected.length} video${selected.length === 1 ? '' : 's'}…`);
-      const enriched = await Promise.all(
-        selected.map(async (video) => {
-          const info = await window.api.probeComposerVideo(video.path);
-          return {
-            ...video,
-            durationSeconds: info.durationSeconds,
-            width: info.width,
-            height: info.height,
-            hasAudio: info.hasAudio,
-          };
-        }),
-      );
+      const currentVideos = videosRef.current;
+      const currentClips = clipsRef.current;
 
-      const nextVideos = [...videos, ...enriched];
-      setVideos(nextVideos);
-      const nextClips = buildInitialClips(nextVideos);
-      setClips(nextClips);
-      if (!selectedClipId && nextClips[0]) {
-        setSelectedClipId(nextClips[0].id);
+      const nextVideos = [...currentVideos];
+      for (const video of enriched) {
+        if (!nextVideos.some((existing) => existing.path === video.path)) {
+          nextVideos.push(video);
+        }
       }
+      videosRef.current = nextVideos;
+      setVideos(nextVideos);
+
+      // Keep already-placed videos first; append new ones in pick order.
+      const existingPrimary = currentClips
+        .filter((clip) => !clip.isFiller && !clip.isPadImage)
+        .sort((a, b) => a.timelineOffset - b.timelineOffset);
+      const existingPaths = new Set(existingPrimary.map((clip) => clip.sourcePath));
+      const newlyAdded = enriched.filter((video) => !existingPaths.has(video.path));
+      if (newlyAdded.length === 0) {
+        pushActivity('info', 'Selected video is already in the project');
+        return;
+      }
+
+      let offset =
+        existingPrimary.length > 0
+          ? existingPrimary[existingPrimary.length - 1].timelineOffset +
+            existingPrimary[existingPrimary.length - 1].durationSeconds
+          : 0;
+      const appended = newlyAdded.map((video) => {
+        const durationSeconds = Math.max(0.1, video.durationSeconds);
+        const clip: ComposerClip = {
+          id: crypto.randomUUID(),
+          sourcePath: video.path,
+          sourceName: video.name,
+          startSeconds: 0,
+          durationSeconds,
+          timelineOffset: offset,
+          volumePercent: COMPOSER_DEFAULT_VOLUME_PERCENT,
+          muted: false,
+          isFiller: false,
+        };
+        offset += durationSeconds;
+        return clip;
+      });
+      const nextClips =
+        existingPrimary.length > 0 || appended.length > 0
+          ? [...existingPrimary, ...appended]
+          : buildInitialClips(nextVideos);
+      clipsRef.current = nextClips;
+      setClips(nextClips);
+      setSelectedClipId((current) => current ?? nextClips[0]?.id ?? null);
       if (!outputFolder) {
         applyResolvedOutputPath(await window.api.resolveComposerOutputPath());
       }
 
-      setStepActivity(2, `Generating thumbnails & proxy for ${enriched.length} video(s)…`);
+      setStepActivity(2, `Generating thumbnails & proxy for ${newlyAdded.length} video(s)…`);
       const media = await window.api.generateComposerThumbnails({
-        videoPaths: enriched.map((video) => video.path),
+        videoPaths: newlyAdded.map((video) => video.path),
       });
       setThumbnails((current) => ({ ...current, ...media.thumbnails }));
       setProxyPaths((current) => ({ ...current, ...media.proxies }));
-      pushActivity('success', `Added ${enriched.length} video${enriched.length === 1 ? '' : 's'}`);
+      pushActivity('success', `Added ${newlyAdded.map((video) => video.name).join(', ')}`);
 
       if (composerMode === 'video-only') {
         await planTimeline(nextVideos, nextClips, 0, { mode: 'video-only' });
       } else if (audioPath && audioDurationSeconds > 0) {
         await planTimeline(nextVideos, nextClips, audioDurationSeconds);
+      }
+    },
+    [
+      applyResolvedOutputPath,
+      audioDurationSeconds,
+      audioPath,
+      buildInitialClips,
+      composerMode,
+      outputFolder,
+      planTimeline,
+      pushActivity,
+      setStepActivity,
+    ],
+  );
+
+  const addVideos = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    setTimelinePlanned(false);
+    let addedCount = 0;
+    try {
+      // One file per dialog so pick order = timeline order (Windows multi-select is A–Z).
+      while (true) {
+        setStepActivity(
+          1,
+          addedCount === 0
+            ? 'Selecting video…'
+            : `Select next video (${addedCount} added — Cancel when done)…`,
+        );
+        const selected = await window.api.selectComposerVideos();
+        if (selected.length === 0) {
+          if (addedCount === 0) {
+            setActivityMessage(null);
+          } else {
+            pushActivity('info', `Finished adding ${addedCount} video${addedCount === 1 ? '' : 's'}`);
+          }
+          break;
+        }
+
+        const video = selected[0];
+        setStepActivity(1, `Reading ${video.name}…`);
+        const info = await window.api.probeComposerVideo(video.path);
+        await importEnrichedVideos([
+          {
+            ...video,
+            durationSeconds: info.durationSeconds,
+            width: info.width,
+            height: info.height,
+            hasAudio: info.hasAudio,
+          },
+        ]);
+        addedCount += 1;
       }
     } catch (selectError) {
       const message = selectError instanceof Error ? selectError.message : 'Unable to add videos';
@@ -291,19 +375,7 @@ export function useVideoComposer(otherJobActive: boolean) {
     } finally {
       setBusy(false);
     }
-  }, [
-    applyResolvedOutputPath,
-    audioDurationSeconds,
-    audioPath,
-    buildInitialClips,
-    composerMode,
-    outputFolder,
-    planTimeline,
-    pushActivity,
-    selectedClipId,
-    setStepActivity,
-    videos,
-  ]);
+  }, [importEnrichedVideos, pushActivity, setStepActivity]);
 
   const selectAudio = useCallback(async () => {
     setBusy(true);
@@ -586,24 +658,33 @@ export function useVideoComposer(otherJobActive: boolean) {
       await cancel();
     }
 
+    // Stop preview first so Chromium releases open video/audio file handles.
+    setIsPreviewPlaying(false);
+    setPlayheadSeconds(0);
+    setExportedOutputPath(null);
     setVideos([]);
     setAudioPath(null);
     setAudioDurationSeconds(0);
     setCustomDurationSeconds(null);
     setPadImagePath(null);
     setClips([]);
+    videosRef.current = [];
+    clipsRef.current = [];
     setThumbnails({});
     setProxyPaths({});
     setSelectedClipId(null);
     setTimelinePlanned(false);
     setError(null);
-    setExportedOutputPath(null);
-    setPlayheadSeconds(0);
-    setIsPreviewPlaying(false);
     setTimelineZoom(28);
     setActivityMessage(null);
     setActivityLogs([]);
     setProgress({ ...INITIAL_COMPOSER_PROGRESS, logs: [] });
+
+    try {
+      await window.api.clearComposerMedia();
+    } catch {
+      // best-effort temp/proxy cleanup
+    }
 
     try {
       applyResolvedOutputPath(await window.api.resolveComposerOutputPath());
@@ -612,7 +693,10 @@ export function useVideoComposer(otherJobActive: boolean) {
       setOutputFileName('combined');
     }
 
-    pushActivity('info', 'New project started — saved settings profiles kept.');
+    pushActivity(
+      'info',
+      'New project started — media cleared; mode & branding settings kept.',
+    );
   }, [applyResolvedOutputPath, cancel, isWorking, pushActivity]);
   const idle = !isWorking && !busy && !otherJobActive;
   const ready =
@@ -676,11 +760,31 @@ export function useVideoComposer(otherJobActive: boolean) {
     canCreateNew: idle,
     hasProjectContent,
     setSelectedClipId,
+    selectClip: (clipId: string) => {
+      setSelectedClipId(clipId);
+      setIsPreviewPlaying(false);
+      const clip = clips.find((item) => item.id === clipId);
+      if (clip) {
+        setPlayheadSeconds(Math.max(0, clip.timelineOffset));
+      }
+    },
+    selectVideo: (videoPath: string) => {
+      const clip =
+        clips.find((item) => item.sourcePath === videoPath && !item.isFiller && !item.isPadImage) ??
+        clips.find((item) => item.sourcePath === videoPath);
+      if (!clip) {
+        return;
+      }
+      setSelectedClipId(clip.id);
+      setIsPreviewPlaying(false);
+      setPlayheadSeconds(Math.max(0, clip.timelineOffset));
+    },
     setPlayheadSeconds,
     setIsPreviewPlaying,
     setTimelineZoom,
     changeComposerMode: (mode: ComposerMode) => {
       setComposerMode(mode);
+      saveComposerMode(mode);
       setTimelinePlanned(false);
       if (mode === 'video-only' && videos.length > 0) {
         void planTimeline(videos, buildInitialClips(videos), 0, { mode: 'video-only' });

@@ -306,6 +306,8 @@ async function buildEncoderAttempts(profile: BrandingEncodeProfile): Promise<Enc
 interface OverlayAssets {
   watermarkPath: string | null;
   watermarkTargetWidthPx: number | null;
+  /** Text logos: Logo Size is a max width. Image logos: exact target width. */
+  watermarkConstrainWidthOnly: boolean;
   movingTextPath: string | null;
   sideImages: Array<{
     side: BrandingSide;
@@ -359,6 +361,7 @@ export async function prepareBrandingOverlayAssets(
 ): Promise<OverlayAssets> {
   let watermarkPath: string | null = null;
   let watermarkTargetWidthPx: number | null = null;
+  let watermarkConstrainWidthOnly = false;
   let movingTextPath: string | null = null;
   const sideImages: OverlayAssets['sideImages'] = [];
   const sideImageDimensions: Partial<Record<BrandingSide, ImageDimensions>> = {};
@@ -416,10 +419,12 @@ export async function prepareBrandingOverlayAssets(
         maxWidthPx: Math.round(layout.outputWidth * 0.9),
         shadow: config.watermark.text.shadow,
       });
+      // Logo Size caps text lockup width so secondary stays readable at height-% size.
       watermarkTargetWidthPx = Math.max(
         2,
         Math.round((layout.outputWidth * config.watermark.scalePercent) / 100),
       );
+      watermarkConstrainWidthOnly = true;
     }
   }
 
@@ -438,7 +443,7 @@ export async function prepareBrandingOverlayAssets(
     });
   }
 
-  return { watermarkPath, watermarkTargetWidthPx, movingTextPath, sideImages, layout };
+  return { watermarkPath, watermarkTargetWidthPx, watermarkConstrainWidthOnly, movingTextPath, sideImages, layout };
 }
 
 function isMp4LikeContainer(outputPath: string): boolean {
@@ -535,6 +540,7 @@ export async function brandVideo(options: BrandVideoOptions): Promise<BrandVideo
         ? {
             inputIndex: watermarkInputIndex,
             targetWidthPx: assets.watermarkTargetWidthPx,
+            constrainWidthOnly: assets.watermarkConstrainWidthOnly,
             opacity: config.watermark.opacityPercent / 100,
             position: config.watermark.position,
             marginXPx: Math.round((assets.layout.outputWidth * config.watermark.marginPercent) / 100),

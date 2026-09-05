@@ -5,6 +5,7 @@ import { SettingsProfilePicker } from '../settings/SettingsProfilePicker';
 import { MovingTextSettings } from '../branding/MovingTextSettings';
 import { SideImagesSettings } from '../branding/SideImagesSettings';
 import { SubtitlesPositionControls } from '../branding/SubtitlesPositionControls';
+import { SubtitleDesignPicker } from '../branding/SubtitleDesignPicker';
 import { WatermarkSettings } from '../branding/WatermarkSettings';
 import { PresetPicker } from '../imageEditing/PresetPicker';
 import {
@@ -158,13 +159,18 @@ export function ComposerControls({
 
       <Panel className="space-y-2.5 bg-surface p-3.5">
         <CheckboxField
-          label="English reels subtitles (Local Whisper)"
+          label="English subtitles (Local Whisper)"
           checked={branding.subtitles.enabled}
           disabled={disabled}
           onChange={(enabled) => {
             onUpdateSubtitles({ enabled });
           }}
           hint="Uses the soundtrack when selected; otherwise speech from the combined video audio."
+        />
+        <SubtitleDesignPicker
+          value={branding.subtitles}
+          disabled={disabled}
+          onChange={onUpdateSubtitles}
         />
         <SubtitlesPositionControls
           value={branding.subtitles}

@@ -192,8 +192,22 @@ export interface BrandingImagePresetConfig {
   tuning: ImageEditTuningRef;
 }
 
+/** Selectable caption look for preview + ASS burn-in. */
+export type SubtitleDesignId = 'reels' | 'cinematic-kinetic';
+
+export const SUBTITLE_DESIGN_IDS: readonly SubtitleDesignId[] = [
+  'reels',
+  'cinematic-kinetic',
+] as const;
+
+export const DEFAULT_SUBTITLE_DESIGN_ID: SubtitleDesignId = 'reels';
+
 export interface BrandingSubtitlesConfig {
   enabled: boolean;
+  /** Caption visual design (Reels, Cinematic Kinetic, …). */
+  designId: SubtitleDesignId;
+  /** Active/focus word hex colour, e.g. #00ffff. */
+  focusColor: string;
   /** 0 = left edge … 50 = center … 100 = right. Default 50. */
   xPercent: number;
   /**
@@ -252,7 +266,7 @@ export const DEFAULT_TEXT_LOGO_CONFIG: TextLogoConfig = {
   secondaryText: 'Radio',
   fontFamily: 'sans',
   fontSizePercent: 6,
-  secondaryFontSizePercent: 2,
+  secondaryFontSizePercent: 4,
   fontWeight: 'bold',
   color: '#ffffff',
   shadow: true,
@@ -292,8 +306,12 @@ export const DEFAULT_BRANDING_IMAGE_PRESET: BrandingImagePresetConfig = {
   },
 };
 
+export const DEFAULT_SUBTITLE_FOCUS_COLOR = '#00ffff';
+
 export const DEFAULT_BRANDING_SUBTITLES: BrandingSubtitlesConfig = {
   enabled: false,
+  designId: DEFAULT_SUBTITLE_DESIGN_ID,
+  focusColor: DEFAULT_SUBTITLE_FOCUS_COLOR,
   xPercent: 50,
   yPercent: SUBTITLE_DEFAULT_Y_PERCENT,
 };

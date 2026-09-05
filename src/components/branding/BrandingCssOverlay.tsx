@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   DEFAULT_BRANDING_SUBTITLES,
+  DEFAULT_SUBTITLE_DESIGN_ID,
   type BrandingConfig,
   type BrandingSide,
   type OverlayPosition,
+  type SubtitleDesignId,
 } from '../../../shared/branding';
 import { LocalMediaImage } from '../ui/LocalMediaImage';
 import { resolvePreviewLayout, type PreviewSideDims } from './previewLayout';
@@ -18,6 +20,7 @@ interface BrandingCssOverlayProps {
 
 const DEMO_SUBTITLE_WORDS = ['This', 'is', 'a', 'demo'] as const;
 const DEMO_ACTIVE_WORD_INDEX = 2;
+const KINETIC_WORD_CYCLE_MS = 620;
 
 function positionStyle(position: OverlayPosition, marginPercent: number): CSSProperties {
   const margin = `${marginPercent}cqw`;
@@ -106,6 +109,117 @@ function useSideImageDimensions(
   return dims;
 }
 
+function DemoSubtitleOverlay({
+  designId,
+  focusColor,
+  xPercent,
+  yPercent,
+}: {
+  designId: SubtitleDesignId;
+  focusColor: string;
+  xPercent: number;
+  yPercent: number;
+}) {
+  const [kineticActiveIndex, setKineticActiveIndex] = useState(0);
+  const isKinetic = designId === 'cinematic-kinetic';
+  const accent = focusColor || DEFAULT_BRANDING_SUBTITLES.focusColor;
+
+  useEffect(() => {
+    if (!isKinetic) {
+      return;
+    }
+    setKineticActiveIndex(0);
+    const timer = window.setInterval(() => {
+      setKineticActiveIndex((current) => (current + 1) % DEMO_SUBTITLE_WORDS.length);
+    }, KINETIC_WORD_CYCLE_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isKinetic]);
+
+  const activeIndex = isKinetic ? kineticActiveIndex : DEMO_ACTIVE_WORD_INDEX;
+
+  if (isKinetic) {
+    return (
+      <div
+        className="absolute z-[3] max-w-[92%] text-center uppercase"
+        style={{
+          left: `${xPercent}%`,
+          top: `${yPercent}%`,
+          transform: 'translate(-50%, -50%)',
+          fontFamily: 'Impact, "Arial Black", Haettenschweiler, "Arial Narrow Bold", sans-serif',
+          fontSize: '4.1cqh',
+          fontWeight: 900,
+          letterSpacing: '-0.045em',
+          lineHeight: 1.05,
+          whiteSpace: 'nowrap',
+        }}
+        aria-hidden
+      >
+        {DEMO_SUBTITLE_WORDS.map((word, index) => {
+          const isActive = index === activeIndex;
+          return (
+            <span
+              key={`${word}-${index}-${isActive ? activeIndex : 'idle'}`}
+              className={[
+                'inline-block',
+                index > 0 ? 'ml-[0.18em]' : '',
+                isActive ? 'subtitle-kinetic-pop' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              style={
+                isActive
+                  ? {
+                      color: accent,
+                      filter:
+                        'drop-shadow(0 0.04em 0.02em rgba(0,0,0,0.95)) drop-shadow(0 0.1em 0.18em rgba(0,0,0,0.72))',
+                    }
+                  : {
+                      color: '#ffffff',
+                      WebkitTextStroke: '0.07em rgba(0,0,0,0.92)',
+                      paintOrder: 'stroke fill',
+                      textShadow: '0 0.08em 0.16em rgba(0,0,0,0.78)',
+                    }
+              }
+            >
+              {word}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="absolute z-[3] whitespace-nowrap text-center font-black uppercase tracking-wide text-white"
+      style={{
+        left: `${xPercent}%`,
+        top: `${yPercent}%`,
+        transform: 'translate(-50%, -50%)',
+        fontSize: '3.6cqh',
+        WebkitTextStroke: '0.08em rgba(0,0,0,0.9)',
+        paintOrder: 'stroke fill',
+        textShadow: '0 0.08em 0.16em rgba(0,0,0,0.75)',
+      }}
+      aria-hidden
+    >
+      {DEMO_SUBTITLE_WORDS.map((word, index) => (
+        <span
+          key={`${word}-${index}`}
+          className={index > 0 ? 'ml-[0.28em]' : undefined}
+          style={
+            index === activeIndex ? { color: accent, fontWeight: 900 } : undefined
+          }
+        >
+          {word}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function BrandingCssOverlay({
   config,
   sourceWidth = 16,
@@ -158,6 +272,9 @@ export function BrandingCssOverlay({
   const subtitleY = Number.isFinite(config.subtitles.yPercent)
     ? config.subtitles.yPercent
     : DEFAULT_BRANDING_SUBTITLES.yPercent;
+  const subtitleDesignId = config.subtitles.designId ?? DEFAULT_SUBTITLE_DESIGN_ID;
+  const subtitleFocusColor =
+    config.subtitles.focusColor ?? DEFAULT_BRANDING_SUBTITLES.focusColor;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden [container-type:size]">
@@ -247,33 +364,12 @@ export function BrandingCssOverlay({
       ) : null}
 
       {config.subtitles.enabled ? (
-        <div
-          className="absolute z-[3] whitespace-nowrap text-center font-black uppercase tracking-wide text-white"
-          style={{
-            left: `${subtitleX}%`,
-            top: `${subtitleY}%`,
-            transform: 'translate(-50%, -50%)',
-            fontSize: '3.6cqh',
-            WebkitTextStroke: '0.08em rgba(0,0,0,0.9)',
-            paintOrder: 'stroke fill',
-            textShadow: '0 0.08em 0.16em rgba(0,0,0,0.75)',
-          }}
-          aria-hidden
-        >
-          {DEMO_SUBTITLE_WORDS.map((word, index) => (
-            <span
-              key={`${word}-${index}`}
-              className={index > 0 ? 'ml-[0.28em]' : undefined}
-              style={
-                index === DEMO_ACTIVE_WORD_INDEX
-                  ? { color: '#00ffff', fontWeight: 900 }
-                  : undefined
-              }
-            >
-              {word}
-            </span>
-          ))}
-        </div>
+        <DemoSubtitleOverlay
+          designId={subtitleDesignId}
+          focusColor={subtitleFocusColor}
+          xPercent={subtitleX}
+          yPercent={subtitleY}
+        />
       ) : null}
     </div>
   );

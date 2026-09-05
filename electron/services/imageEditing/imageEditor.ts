@@ -180,14 +180,23 @@ async function createSideLayer(
     .toBuffer();
 }
 
-async function applyOpacity(imagePath: string, opacityPercent: number, width: number): Promise<{
+async function applyOpacity(
+  imagePath: string,
+  opacityPercent: number,
+  width: number,
+  options?: { withoutEnlargement?: boolean },
+): Promise<{
   buffer: Buffer;
   width: number;
   height: number;
 }> {
   const resized = sharp(imagePath)
     .rotate()
-    .resize({ width, fit: 'inside' })
+    .resize({
+      width,
+      fit: 'inside',
+      withoutEnlargement: options?.withoutEnlargement === true,
+    })
     .ensureAlpha();
   const { data, info } = await resized.raw().toBuffer({ resolveWithObject: true });
   const opacity = opacityPercent / 100;
@@ -293,7 +302,8 @@ async function buildComposite(
 
   if (config.watermark.enabled) {
     let watermarkPath: string;
-    if (config.watermark.mode === 'text') {
+    const isTextLogo = config.watermark.mode === 'text';
+    if (isTextLogo) {
       watermarkPath = await renderTextOverlayAsset({
         text: config.watermark.text.text,
         secondaryText: config.watermark.text.secondaryText,
@@ -323,6 +333,7 @@ async function buildComposite(
       watermarkPath,
       config.watermark.opacityPercent,
       Math.max(2, Math.round((layout.outputWidth * config.watermark.scalePercent) / 100)),
+      { withoutEnlargement: isTextLogo },
     );
     const position = overlayPosition(
       config.watermark.position,

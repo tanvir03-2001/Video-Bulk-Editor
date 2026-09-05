@@ -25,6 +25,11 @@ export interface WatermarkOverlayPlan {
   inputIndex: number;
   /** Target width in pixels, or null to use the image as-is (pre-rendered text). */
   targetWidthPx: number | null;
+  /**
+   * When true, targetWidthPx is a maximum width (text lockups). When false/omitted,
+   * the watermark is forced to exactly targetWidthPx (image logos).
+   */
+  constrainWidthOnly?: boolean;
   /** 0–1 multiplier applied on top of the image's own alpha channel. */
   opacity: number;
   position: OverlayPosition;
@@ -167,9 +172,15 @@ export function buildBrandingFilterGraph(
   }
 
   if (watermark) {
-    const scaleStep =
+    const targetWidth =
       watermark.targetWidthPx && watermark.targetWidthPx > 0
-        ? `scale=${Math.max(2, Math.round(watermark.targetWidthPx))}:-1:flags=${scaleFlags},`
+        ? Math.max(2, Math.round(watermark.targetWidthPx))
+        : 0;
+    const scaleStep =
+      targetWidth > 0
+        ? watermark.constrainWidthOnly
+          ? `scale='min(${targetWidth}\\,iw)':-1:flags=${scaleFlags},`
+          : `scale=${targetWidth}:-1:flags=${scaleFlags},`
         : '';
     chains.push(
       `[${watermark.inputIndex}:v]${scaleStep}format=rgba,colorchannelmixer=aa=${formatOpacity(watermark.opacity)}[wmimg]`,

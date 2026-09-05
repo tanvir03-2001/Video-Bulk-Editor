@@ -194,6 +194,7 @@ export const IpcChannels = {
   PLAN_COMPOSER_TIMELINE: 'plan-composer-timeline',
   START_COMPOSER_EXPORT: 'start-composer-export',
   CANCEL_COMPOSER: 'cancel-composer',
+  CLEAR_COMPOSER_MEDIA: 'clear-composer-media',
   COMPOSER_EVENT: 'composer-event',
   RESOLVE_COMPOSER_OUTPUT_PATH: 'resolve-composer-output-path',
   PROBE_COMPOSER_VIDEO: 'probe-composer-video',
@@ -311,6 +312,8 @@ export interface ElectronApi {
   planComposerTimeline: (request: ComposerPlanTimelineRequest) => Promise<ComposerPlanTimelineResult>;
   startComposerExport: (request: ComposerExportRequest) => Promise<void>;
   cancelComposer: () => Promise<void>;
+  /** Drop temp thumbs/proxies and release combiner media session. */
+  clearComposerMedia: () => Promise<void>;
   onComposer: (callback: (event: ComposerEvent) => void) => () => void;
   resolveComposerOutputPath: () => Promise<string>;
   probeComposerVideo: (

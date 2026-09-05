@@ -6,8 +6,10 @@ import {
   BRANDING_FONT_WEIGHTS,
   BRANDING_LIMITS,
   DEFAULT_BRANDING_CONFIG,
+  DEFAULT_SUBTITLE_DESIGN_ID,
   MOVING_TEXT_SPEEDS,
   OVERLAY_POSITIONS,
+  SUBTITLE_DESIGN_IDS,
   hasAnyBrandingEnabled,
   isSupportedLogoExtension,
   validateBrandingConfig,
@@ -18,6 +20,7 @@ import {
   type MovingTextSpeed,
   type OverlayPosition,
   type SideImageConfig,
+  type SubtitleDesignId,
   type TextLogoConfig,
 } from '../../../shared/branding';
 
@@ -286,6 +289,15 @@ export function sanitizeBrandingConfig(raw: unknown): BrandingConfig {
     },
     subtitles: {
       enabled: subtitlesSource.enabled === true,
+      designId: sanitizeEnum<SubtitleDesignId>(
+        subtitlesSource.designId,
+        [...SUBTITLE_DESIGN_IDS],
+        DEFAULT_SUBTITLE_DESIGN_ID,
+      ),
+      focusColor: sanitizeHexColor(
+        subtitlesSource.focusColor,
+        DEFAULT_BRANDING_CONFIG.subtitles.focusColor,
+      ),
       xPercent: clampNumber(
         subtitlesSource.xPercent,
         BRANDING_LIMITS.subtitlePositionPercent.min,

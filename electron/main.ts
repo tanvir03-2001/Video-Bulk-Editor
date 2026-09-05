@@ -621,8 +621,8 @@ function registerComposerHandlers(): void {
       return [];
     }
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Select Videos to Combine',
-      properties: ['openFile', 'multiSelections'],
+      title: 'Select video — first pick plays first (Cancel when done)',
+      properties: ['openFile'],
       filters: [
         {
           name: 'Videos',
@@ -700,6 +700,10 @@ function registerComposerHandlers(): void {
 
   ipcMain.handle(IpcChannels.CANCEL_COMPOSER, () => {
     composerRunner.cancel();
+  });
+
+  ipcMain.handle(IpcChannels.CLEAR_COMPOSER_MEDIA, async () => {
+    await composerRunner.dispose();
   });
 
   ipcMain.handle(IpcChannels.PROBE_COMPOSER_VIDEO, async (_event, filePath: unknown) => {

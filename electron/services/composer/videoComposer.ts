@@ -273,6 +273,7 @@ async function encodeClipSegment(options: {
         `volume=${volume.toFixed(3)}`,
         ...segmentVideoArgs(encodeProfile),
         ...segmentAudioArgs(),
+        '-shortest',
         '-y',
         toFfmpegPath(outputPath),
       ],
@@ -413,6 +414,7 @@ async function muxFinalOutput(options: {
     isPreview ? '96k' : '192k',
     '-movflags',
     '+faststart',
+    ...(expectedDuration > 0 ? ['-t', expectedDuration.toFixed(3)] : []),
     '-progress',
     'pipe:1',
     '-nostats',
@@ -613,14 +615,13 @@ export async function composeVideo(options: ComposeVideoOptions): Promise<Compos
 
     if (applySubtitles && encodeProfile === 'export') {
       onPhase?.('Generating English subtitles');
-      const subtitleSource =
-        hasExternalAudio && audioPath ? audioPath : workingPath;
-      const timelineOffsetSeconds =
-        hasExternalAudio && audioPath ? audioDelaySeconds : 0;
+      // Prefer clean soundtrack ASR + exact adelay offset. Muxed mix includes clip
+      // audio that confuses Whisper late in the timeline (start OK, end drifts).
+      const useSoundtrackAsr = hasExternalAudio && Boolean(audioPath);
       const assPath = await generateEnglishSubtitlesAss({
-        mediaPath: subtitleSource,
-        // Soundtrack is adelay'd onto the timeline; shift captions to match.
-        timelineOffsetSeconds,
+        mediaPath: useSoundtrackAsr ? (audioPath as string) : workingPath,
+        timelineOffsetSeconds: useSoundtrackAsr ? audioDelaySeconds : 0,
+        clampToMediaPath: workingPath,
         onStatus: (message) => onPhase?.(message),
         shouldCancel,
         registerChild,

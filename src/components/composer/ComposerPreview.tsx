@@ -94,6 +94,20 @@ export function ComposerPreview({
     };
   }, [activeMediaPath]);
 
+  // When media paths clear (New Project), unload elements so OS can delete source files.
+  useEffect(() => {
+    if (videoUrl) {
+      return;
+    }
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }, [videoUrl]);
+
   useEffect(() => {
     if (!audioPath || isExported) {
       setAudioUrl(null);
@@ -118,6 +132,19 @@ export function ComposerPreview({
       cancelled = true;
     };
   }, [audioPath, isExported]);
+
+  useEffect(() => {
+    if (audioUrl) {
+      return;
+    }
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+  }, [audioUrl]);
 
   const applyTimelineToVideo = useCallback(
     (timelineSeconds: number) => {

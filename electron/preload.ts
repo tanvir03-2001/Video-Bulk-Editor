@@ -250,6 +250,10 @@ const api: ElectronApi = {
     return ipcRenderer.invoke(IpcChannels.CANCEL_COMPOSER) as Promise<void>;
   },
 
+  clearComposerMedia: (): Promise<void> => {
+    return ipcRenderer.invoke(IpcChannels.CLEAR_COMPOSER_MEDIA) as Promise<void>;
+  },
+
   onComposer: (callback: (event: ComposerEvent) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, payload: ComposerEvent): void => {
       callback(payload);
